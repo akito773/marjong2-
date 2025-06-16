@@ -150,6 +150,7 @@
                     <button class="button" onclick="testDiscard()" id="discardBtn" disabled>選択牌を捨牌</button>
                     <button class="button" onclick="toggleDebugMode()" id="debugBtn">🔍 デバッグモード</button>
                     <div>選択中の牌: <span id="selectedTile">なし</span></div>
+                    <div>操作プレイヤー: <span id="selectedPlayer">プレイヤー1</span></div>
                     <div>モード: <span id="currentMode">通常表示</span></div>
                 </div>
                 
@@ -181,6 +182,7 @@
         let currentGameId = null;
         let currentGameState = null;
         let selectedTileId = null;
+        let selectedPlayerId = null;
         let debugMode = false;
 
         function log(message) {
@@ -252,11 +254,28 @@
         async function testDiscard() {
             if (!currentGameId || !selectedTileId) return;
 
-            const currentPlayer = currentGameState.players[currentGameState.currentPlayer];
-            const selectedTile = currentPlayer.hand.tiles.find(tile => tile.id === selectedTileId);
+            // デバッグモード時は選択されたプレイヤー、通常モードは現在のプレイヤー
+            let targetPlayerId;
+            let targetPlayer;
+            
+            if (debugMode && selectedPlayerId !== null) {
+                targetPlayerId = selectedPlayerId;
+                targetPlayer = currentGameState.players[selectedPlayerId];
+            } else {
+                targetPlayerId = currentGameState.currentPlayer;
+                targetPlayer = currentGameState.players[currentGameState.currentPlayer];
+            }
+
+            const selectedTile = targetPlayer.hand.tiles.find(tile => tile.id === selectedTileId);
 
             if (!selectedTile) {
                 log(`❌ 選択された牌が見つかりません`);
+                return;
+            }
+
+            // ターン外プレイヤーの操作チェック（デバッグモード時は許可）
+            if (!debugMode && targetPlayerId !== currentGameState.currentPlayer) {
+                log(`❌ ${targetPlayer.name}のターンではありません`);
                 return;
             }
 
@@ -266,7 +285,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         type: 'discard',
-                        playerId: currentPlayer.id,
+                        playerId: targetPlayer.id,
                         tile: selectedTile
                     })
                 });
@@ -276,8 +295,9 @@
                 if (result.status === 'OK') {
                     currentGameState = result.data.gameState;
                     selectedTileId = null;
+                    selectedPlayerId = null;
                     updateGameDisplay();
-                    log(`🀄 捨牌成功: ${selectedTile.displayName}`);
+                    log(`🀄 ${targetPlayer.name}の捨牌成功: ${selectedTile.displayName}`);
                 } else {
                     log(`❌ 捨牌失敗: ${result.message}`);
                 }
@@ -287,8 +307,9 @@
         }
 
         // 牌選択
-        function selectTile(tileId, displayName) {
+        function selectTile(tileId, displayName, playerId = null) {
             selectedTileId = tileId;
+            selectedPlayerId = playerId;
             document.getElementById('selectedTile').textContent = displayName;
             document.getElementById('discardBtn').disabled = false;
             
@@ -296,7 +317,28 @@
             document.querySelectorAll('.tile').forEach(tile => tile.classList.remove('selected'));
             document.querySelector(`[data-tile-id="${tileId}"]`).classList.add('selected');
             
-            log(`🎯 牌選択: ${displayName}`);
+            // プレイヤー表示更新
+            if (playerId !== null && currentGameState) {
+                const playerName = currentGameState.players[playerId].name;
+                document.getElementById('selectedPlayer').textContent = playerName;
+                log(`🎯 ${playerName}の牌選択: ${displayName}`);
+            } else {
+                log(`🎯 牌選択: ${displayName}`);
+            }
+        }
+
+        // プレイヤー選択
+        function selectPlayer(playerId, playerName) {
+            selectedPlayerId = playerId;
+            selectedTileId = null;
+            document.getElementById('selectedPlayer').textContent = playerName;
+            document.getElementById('selectedTile').textContent = 'なし';
+            document.getElementById('discardBtn').disabled = true;
+            
+            // 選択状態リセット
+            document.querySelectorAll('.tile').forEach(tile => tile.classList.remove('selected'));
+            
+            log(`👤 操作プレイヤー変更: ${playerName}`);
         }
 
         // ゲーム画面更新
@@ -333,16 +375,17 @@
                 const isCurrentPlayer = index === currentGameState.currentPlayer;
                 const isCurrentUser = index === 0; // 仮に最初のプレイヤーをユーザーとする
                 const showHand = debugMode || isCurrentUser;
+                const canOperate = debugMode || isCurrentUser;
                 
                 return `
                     <div class="player-info ${isCurrentPlayer ? 'current-player' : ''}">
-                        <h4>${player.name} (${player.wind}風) ${player.isDealer ? '👑' : ''} ${isCurrentPlayer ? '🎯' : ''}</h4>
+                        <h4 ${debugMode ? `onclick="selectPlayer(${index}, '${player.name}')" style="cursor: pointer; color: #FFD700;"` : ''}>${player.name} (${player.wind}風) ${player.isDealer ? '👑' : ''} ${isCurrentPlayer ? '🎯' : ''} ${debugMode ? '👆' : ''}</h4>
                         <div><strong>点数:</strong> ${player.score}点</div>
                         <div><strong>手牌:</strong> ${player.hand.tiles.length}枚</div>
                         ${showHand ? `
                             <div class="tiles">
                                 ${player.hand.tiles.map(tile => 
-                                    `<div class="tile" data-tile-id="${tile.id}" ${isCurrentUser ? `onclick="selectTile(${tile.id}, '${tile.displayName}')"` : ''}>${tile.unicode} ${tile.displayName}</div>`
+                                    `<div class="tile" data-tile-id="${tile.id}" ${canOperate ? `onclick="selectTile(${tile.id}, '${tile.displayName}', ${index})"` : ''}>${tile.unicode} ${tile.displayName}</div>`
                                 ).join('')}
                             </div>
                         ` : `
@@ -452,17 +495,41 @@
         }
 
         // デバッグモード切り替え
-        function toggleDebugMode() {
+        async function toggleDebugMode() {
             debugMode = !debugMode;
             document.getElementById('currentMode').textContent = debugMode ? '🔍 デバッグモード' : '通常表示';
             document.getElementById('debugBtn').textContent = debugMode ? '👁️ 通常モード' : '🔍 デバッグモード';
             
+            // サーバーにデバッグモード設定を送信
+            if (currentGameId) {
+                try {
+                    const response = await fetch(`/api/game/${currentGameId}/debug`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enabled: debugMode })
+                    });
+                    
+                    const result = await response.json();
+                    if (result.status !== 'OK') {
+                        log(`❌ デバッグモード設定失敗: ${result.message}`);
+                    }
+                } catch (error) {
+                    log(`❌ デバッグモード設定エラー: ${error.message}`);
+                }
+            }
+            
             if (debugMode) {
                 document.body.classList.add('debug-mode');
-                log('🔍 デバッグモード ON - 全プレイヤー情報表示');
+                log('🔍 デバッグモード ON - 全プレイヤー操作可能');
             } else {
                 document.body.classList.remove('debug-mode');
                 log('👁️ 通常モード ON - 自分の手牌のみ表示');
+                // 選択状態リセット
+                selectedPlayerId = null;
+                selectedTileId = null;
+                document.getElementById('selectedPlayer').textContent = 'プレイヤー1';
+                document.getElementById('selectedTile').textContent = 'なし';
+                document.getElementById('discardBtn').disabled = true;
             }
             
             if (currentGameState) {

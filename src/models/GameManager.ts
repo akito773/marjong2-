@@ -9,6 +9,7 @@ export class GameManager {
   private tileManager: TileManager;
   private players: Player[] = [];
   private actionQueue: PlayerAction[] = [];
+  private debugMode: boolean = false;
 
   constructor(
     gameId: string,
@@ -203,7 +204,8 @@ export class GameManager {
       throw new Error('Discard action requires a tile');
     }
 
-    if (this.gameState.currentPlayer !== player.position) {
+    // デバッグモード時はターンチェックをスキップ
+    if (!this.debugMode && this.gameState.currentPlayer !== player.position) {
       throw new Error(`Not ${player.name}'s turn`);
     }
 
@@ -429,6 +431,12 @@ export class GameManager {
     return { ...this.gameState };
   }
 
+  // デバッグモード設定
+  setDebugMode(enabled: boolean): void {
+    this.debugMode = enabled;
+    console.log(`🔧 デバッグモード: ${enabled ? 'ON' : 'OFF'}`);
+  }
+
   // デバッグ情報
   getDebugInfo(): {
     gameId: string;
@@ -436,6 +444,7 @@ export class GameManager {
     currentPlayer: string;
     remainingTiles: number;
     actionQueueLength: number;
+    debugMode: boolean;
     players: ReturnType<Player['getDebugInfo']>[];
   } {
     return {
@@ -444,6 +453,7 @@ export class GameManager {
       currentPlayer: this.players[this.gameState.currentPlayer]?.name || 'Unknown',
       remainingTiles: this.gameState.remainingTiles,
       actionQueueLength: this.actionQueue.length,
+      debugMode: this.debugMode,
       players: this.players.map(p => p.getDebugInfo()),
     };
   }

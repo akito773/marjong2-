@@ -87,6 +87,16 @@ export class GameSessionManager {
     return game.getDebugInfo();
   }
 
+  // デバッグモード設定
+  setDebugMode(gameId: string, enabled: boolean): boolean {
+    const game = this.getGame(gameId);
+    if (!game) {
+      return false;
+    }
+    game.setDebugMode(enabled);
+    return true;
+  }
+
   // アクティブなゲーム一覧
   getActiveGames(): string[] {
     return Array.from(this.activeSessions.keys());

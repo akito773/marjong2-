@@ -223,6 +223,42 @@ app.get('/api/game/:gameId', (req, res) => {
   }
 });
 
+// デバッグモード設定API
+app.post('/api/game/:gameId/debug', (req, res) => {
+  try {
+    const { gameId } = req.params;
+    const { enabled } = req.body;
+    
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({
+        status: 'Error',
+        message: 'enabled フィールドは boolean である必要があります',
+      });
+    }
+
+    const success = gameSessionManager.setDebugMode(gameId, enabled);
+    
+    if (!success) {
+      return res.status(404).json({
+        status: 'Error',
+        message: 'ゲームが見つかりません',
+      });
+    }
+
+    return res.json({
+      status: 'OK',
+      message: `デバッグモード${enabled ? '有効' : '無効'}にしました`,
+      data: { debugMode: enabled },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'Error',
+      message: 'デバッグモード設定エラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // デバッグ情報専用API
 app.get('/api/game/:gameId/debug', (req, res) => {
   try {
