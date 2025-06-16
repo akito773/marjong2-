@@ -148,6 +148,7 @@
                     <h4>🎲 ゲーム操作</h4>
                     <button class="button" onclick="refreshGameState()">状態更新</button>
                     <button class="button" onclick="testDiscard()" id="discardBtn" disabled>選択牌を捨牌</button>
+                    <button class="button" onclick="manualDraw()" id="drawBtn" disabled>🎯 ツモ</button>
                     <button class="button" onclick="toggleDebugMode()" id="debugBtn">🔍 デバッグモード</button>
                     <div>選択中の牌: <span id="selectedTile">なし</span></div>
                     <div>操作プレイヤー: <span id="selectedPlayer">プレイヤー1</span></div>
@@ -335,10 +336,64 @@
             document.getElementById('selectedTile').textContent = 'なし';
             document.getElementById('discardBtn').disabled = true;
             
+            // ツモボタンの状態更新
+            updateDrawButtonState();
+            
             // 選択状態リセット
             document.querySelectorAll('.tile').forEach(tile => tile.classList.remove('selected'));
             
             log(`👤 操作プレイヤー変更: ${playerName}`);
+        }
+
+        // ツモボタン状態更新
+        function updateDrawButtonState() {
+            const drawBtn = document.getElementById('drawBtn');
+            if (!currentGameState || !debugMode) {
+                drawBtn.disabled = true;
+                return;
+            }
+            
+            const targetPlayerId = selectedPlayerId !== null ? selectedPlayerId : currentGameState.currentPlayer;
+            const targetPlayer = currentGameState.players[targetPlayerId];
+            
+            // 手牌が13枚の時のみツモ可能
+            if (targetPlayer && targetPlayer.hand.tiles.length === 13) {
+                drawBtn.disabled = false;
+                drawBtn.textContent = `🎯 ${targetPlayer.name}ツモ`;
+            } else {
+                drawBtn.disabled = true;
+                drawBtn.textContent = '🎯 ツモ';
+            }
+        }
+
+        // 手動ツモ
+        async function manualDraw() {
+            if (!currentGameId || !debugMode) return;
+
+            const targetPlayerId = selectedPlayerId !== null ? selectedPlayerId : currentGameState.currentPlayer;
+            const targetPlayer = currentGameState.players[targetPlayerId];
+
+            try {
+                const response = await fetch(`/api/game/${currentGameId}/draw`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        playerId: targetPlayer.id
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.status === 'OK') {
+                    currentGameState = result.data.gameState;
+                    updateGameDisplay();
+                    log(`🀄 ${targetPlayer.name}がツモ: ${result.data.tile.displayName}`);
+                } else {
+                    log(`❌ ツモ失敗: ${result.message}`);
+                }
+            } catch (error) {
+                log(`❌ エラー: ${error.message}`);
+            }
         }
 
         // ゲーム画面更新
@@ -421,6 +476,9 @@
             const currentPlayer = currentGameState.players[currentGameState.currentPlayer];
             const isUserTurn = currentGameState.currentPlayer === 0;
             document.getElementById('discardBtn').style.display = isUserTurn ? 'inline-block' : 'none';
+            
+            // ツモボタンの状態更新
+            updateDrawButtonState();
         }
 
         // アクティブゲーム一覧取得

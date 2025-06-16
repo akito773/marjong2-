@@ -97,6 +97,37 @@ export class GameSessionManager {
     return true;
   }
 
+  // 手動ツモ処理
+  processManualDraw(gameId: string, playerId: string): {
+    success: boolean;
+    tile?: any;
+    message: string;
+    gameState?: any;
+  } {
+    const game = this.getGame(gameId);
+    if (!game) {
+      return {
+        success: false,
+        message: `ゲームが見つかりません: ${gameId}`
+      };
+    }
+
+    try {
+      const result = game.manualDraw(playerId);
+      const gameState = game.getGameState();
+      
+      return {
+        ...result,
+        gameState
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
   // アクティブなゲーム一覧
   getActiveGames(): string[] {
     return Array.from(this.activeSessions.keys());

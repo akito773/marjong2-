@@ -316,6 +316,45 @@ app.get('/api/game/:gameId/debug', (req, res) => {
   }
 });
 
+// 手動ツモAPI
+app.post('/api/game/:gameId/draw', (req, res) => {
+  try {
+    const { gameId } = req.params;
+    const { playerId } = req.body;
+
+    if (!playerId) {
+      return res.status(400).json({
+        status: 'Error',
+        message: 'プレイヤーIDが必要です',
+      });
+    }
+
+    const result = gameSessionManager.processManualDraw(gameId, playerId);
+
+    if (!result.success) {
+      return res.status(400).json({
+        status: 'Error',
+        message: result.message,
+      });
+    }
+
+    return res.json({
+      status: 'OK',
+      message: result.message,
+      data: {
+        tile: result.tile,
+        gameState: result.gameState,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'Error',
+      message: '手動ツモエラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // プレイヤーアクション実行API
 app.post('/api/game/:gameId/action', (req, res) => {
   try {

@@ -223,7 +223,12 @@ export class GameManager {
 
     // 次のプレイヤーにツモ（鳴きがない場合）
     if (this.actionQueue.length === 0) {
-      this.nextTurn();
+      if (!this.debugMode) {
+        this.nextTurn();
+      } else {
+        // デバッグモード時は手動でターン管理
+        this.setNextPlayerTurn();
+      }
     }
 
     return [{
@@ -326,7 +331,7 @@ export class GameManager {
     }];
   }
 
-  // 次のターン
+  // 次のターン（自動）
   private nextTurn(): void {
     const nextPlayer = (this.gameState.currentPlayer + 1) % 4;
     const tile = this.tileManager.drawTile();
@@ -346,6 +351,40 @@ export class GameManager {
     (this.gameState as any).currentPlayer = nextPlayer;
 
     console.log(`🎯 ${this.players[nextPlayer].name}のターン`);
+  }
+
+  // デバッグモード用：ターンのみ変更（ツモは手動）
+  private setNextPlayerTurn(): void {
+    const nextPlayer = (this.gameState.currentPlayer + 1) % 4;
+    (this.gameState as any).currentPlayer = nextPlayer;
+    console.log(`🎯 デバッグモード: ${this.players[nextPlayer].name}のターン（ツモ待機中）`);
+  }
+
+  // 手動ツモ処理
+  manualDraw(playerId: string): { success: boolean; tile?: any; message: string } {
+    const playerIndex = parseInt(playerId.split('_')[1]);
+    const player = this.players[playerIndex];
+
+    if (!player) {
+      return { success: false, message: 'プレイヤーが見つかりません' };
+    }
+
+    // デバッグモード以外では現在のプレイヤーのみツモ可能
+    if (!this.debugMode && playerIndex !== this.gameState.currentPlayer) {
+      return { success: false, message: `${player.name}のターンではありません` };
+    }
+
+    const tile = this.tileManager.drawTile();
+    if (!tile) {
+      return { success: false, message: '牌山に牌がありません' };
+    }
+
+    player.drawTile(tile);
+    return { 
+      success: true, 
+      tile: tile,
+      message: `${player.name}が${tile.displayName}をツモ` 
+    };
   }
 
   // 鳴き機会チェック
