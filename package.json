@@ -1,0 +1,16 @@
+{
+  "name": "marjong2-test",
+  "version": "0.1.0",
+  "description": "麻雀ゲーム Hello World テスト",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "keywords": ["mahjong", "game", "nodejs"],
+  "author": "Your Name",
+  "license": "MIT"
+}

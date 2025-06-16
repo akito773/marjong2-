@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>麻雀ゲーム - Hello World</title>
+    <style>
+        body {
+            font-family: 'Hiragino Sans', 'Yu Gothic', 'Meiryo', sans-serif;
+            text-align: center;
+            padding: 50px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            margin: 0;
+            box-sizing: border-box;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 { 
+            font-size: 3em; 
+            margin-bottom: 30px; 
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        h2 {
+            font-size: 2em;
+            margin-bottom: 40px;
+            color: #FFD700;
+        }
+        .status { 
+            background: rgba(255,255,255,0.1); 
+            padding: 25px; 
+            border-radius: 15px; 
+            margin: 20px 0;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .status h3 {
+            margin-top: 0;
+            color: #FFD700;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        button:hover { 
+            background: #45a049; 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .success { color: #4CAF50; }
+        .error { color: #ff6b6b; }
+        .info { color: #74b9ff; }
+        .server-info {
+            text-align: left;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        @media (max-width: 600px) {
+            h1 { font-size: 2em; }
+            h2 { font-size: 1.5em; }
+            .status { padding: 20px 15px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🀄 麻雀ゲーム</h1>
+        <h2>Hello World テスト</h2>
+        
+        <div class="status">
+            <h3>🚀 サーバー接続テスト</h3>
+            <p id="server-status">接続確認中...</p>
+            <button onclick="checkServer()">サーバー状態確認</button>
+            <div id="server-info" class="server-info" style="display: none;"></div>
+        </div>
+        
+        <div class="status">
+            <h3>✅ フロントエンド動作確認</h3>
+            <p class="success">✅ HTMLファイル読み込み成功</p>
+            <p class="success">✅ CSSスタイル適用成功</p>
+            <p id="js-status" class="info">🔄 JavaScript動作確認中...</p>
+            <p id="responsive-status" class="info">📱 レスポンシブデザイン確認中...</p>
+        </div>
+
+        <div class="status">
+            <h3>🌐 接続情報</h3>
+            <p><strong>現在時刻:</strong> <span id="current-time"></span></p>
+            <p><strong>画面サイズ:</strong> <span id="screen-size"></span></p>
+            <p><strong>ユーザーエージェント:</strong></p>
+            <div class="server-info" id="user-agent"></div>
+        </div>
+    </div>
+
+    <script>
+        // JavaScript動作確認
+        document.getElementById('js-status').className = 'success';
+        document.getElementById('js-status').textContent = '✅ JavaScript動作成功';
+        
+        // レスポンシブ確認
+        function updateScreenInfo() {
+            document.getElementById('screen-size').textContent = 
+                `${window.innerWidth} × ${window.innerHeight}`;
+            
+            const status = window.innerWidth < 600 ? 
+                '✅ モバイル表示対応' : '✅ デスクトップ表示対応';
+            document.getElementById('responsive-status').textContent = status;
+            document.getElementById('responsive-status').className = 'success';
+        }
+        
+        // 現在時刻更新
+        function updateTime() {
+            document.getElementById('current-time').textContent = 
+                new Date().toLocaleString('ja-JP');
+        }
+        
+        // ユーザーエージェント表示
+        document.getElementById('user-agent').textContent = navigator.userAgent;
+        
+        // サーバーAPI確認
+        async function checkServer() {
+            const statusElement = document.getElementById('server-status');
+            const infoElement = document.getElementById('server-info');
+            
+            statusElement.innerHTML = '🔄 サーバーに接続中...';
+            statusElement.className = 'info';
+            
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                
+                statusElement.innerHTML = `✅ ${data.message}`;
+                statusElement.className = 'success';
+                
+                // 詳細情報表示
+                infoElement.innerHTML = `
+                    <strong>サーバー詳細情報:</strong><br>
+                    ステータス: ${data.status}<br>
+                    バージョン: ${data.version}<br>
+                    環境: ${data.environment}<br>
+                    応答時刻: ${new Date(data.timestamp).toLocaleString('ja-JP')}<br>
+                    レスポンス時間: ${Date.now() - startTime}ms
+                `;
+                infoElement.style.display = 'block';
+                
+            } catch (error) {
+                statusElement.innerHTML = `❌ サーバー接続エラー<br>${error.message}`;
+                statusElement.className = 'error';
+                
+                infoElement.innerHTML = `
+                    <strong>エラー詳細:</strong><br>
+                    ${error.toString()}<br>
+                    <br>
+                    <strong>対処方法:</strong><br>
+                    1. サーバーが起動しているか確認<br>
+                    2. ポート3000が開放されているか確認<br>
+                    3. ファイアウォール設定を確認
+                `;
+                infoElement.style.display = 'block';
+            }
+        }
+        
+        let startTime;
+        
+        // 初期化処理
+        window.onload = () => {
+            updateScreenInfo();
+            updateTime();
+            
+            // 1秒後にサーバー確認
+            setTimeout(() => {
+                startTime = Date.now();
+                checkServer();
+            }, 1000);
+            
+            // 時刻を1秒ごとに更新
+            setInterval(updateTime, 1000);
+        };
+        
+        // 画面サイズ変更時
+        window.onresize = updateScreenInfo;
+    </script>
+</body>
+</html>
