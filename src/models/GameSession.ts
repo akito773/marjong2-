@@ -128,6 +128,34 @@ export class GameSessionManager {
     }
   }
 
+  // 鳴き機会取得
+  getMeldOpportunities(gameId: string): {
+    success: boolean;
+    opportunities?: any[];
+    message?: string;
+  } {
+    const game = this.getGame(gameId);
+    if (!game) {
+      return {
+        success: false,
+        message: `ゲームが見つかりません: ${gameId}`
+      };
+    }
+
+    try {
+      const opportunities = game.getMeldOpportunities();
+      return {
+        success: true,
+        opportunities
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
   // アクティブなゲーム一覧
   getActiveGames(): string[] {
     return Array.from(this.activeSessions.keys());

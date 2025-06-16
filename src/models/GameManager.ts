@@ -239,14 +239,19 @@ export class GameManager {
     // ゲーム状態を更新
     this.updateGameState();
 
-    return [{
+    const discardAction: GameAction = {
       id: `discard_${Date.now()}`,
       type: 'discard',
       playerId: player.id,
-      data: { tile: action.tile },
+      data: { 
+        tile: action.tile,
+        meldOpportunities: this.actionQueue.length > 0 ? this.actionQueue : undefined
+      },
       description: `${player.name}が${action.tile.displayName}を捨牌`,
       timestamp: Date.now(),
-    }];
+    };
+
+    return [discardAction];
   }
 
   // リーチ処理
@@ -494,6 +499,34 @@ export class GameManager {
   setDebugMode(enabled: boolean): void {
     this.debugMode = enabled;
     console.log(`🔧 デバッグモード: ${enabled ? 'ON' : 'OFF'}`);
+  }
+
+  // 鳴き機会の取得
+  getMeldOpportunities(): { playerId: string; playerName: string; possibleMelds: any[] }[] {
+    if (!this.gameState.lastDiscard || !this.gameState.lastDiscardPlayer) {
+      return [];
+    }
+
+    const opportunities = [];
+    const lastDiscard = this.gameState.lastDiscard;
+    const fromPlayer = this.gameState.lastDiscardPlayer;
+
+    for (let i = 0; i < 4; i++) {
+      if (i === fromPlayer) continue;
+
+      const player = this.players[i];
+      const possibleMelds = player.canMeld(lastDiscard, fromPlayer);
+
+      if (possibleMelds.length > 0) {
+        opportunities.push({
+          playerId: player.id,
+          playerName: player.name,
+          possibleMelds: possibleMelds
+        });
+      }
+    }
+
+    return opportunities;
   }
 
   // デバッグ情報

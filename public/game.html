@@ -150,6 +150,14 @@
                     <button class="button" onclick="testDiscard()" id="discardBtn" disabled>選択牌を捨牌</button>
                     <button class="button" onclick="manualDraw()" id="drawBtn" disabled>🎯 ツモ</button>
                     <button class="button" onclick="toggleDebugMode()" id="debugBtn">🔍 デバッグモード</button>
+                    
+                    <!-- 鳴き処理ボタン -->
+                    <div id="meldButtons" style="display: none; margin-top: 10px;">
+                        <button class="button" onclick="processMeld('chi')" id="chiBtn" disabled>🔗 チー</button>
+                        <button class="button" onclick="processMeld('pon')" id="ponBtn" disabled>⚫ ポン</button>
+                        <button class="button" onclick="processMeld('kan')" id="kanBtn" disabled>🟩 カン</button>
+                        <button class="button" onclick="passMeld()" id="passBtn" disabled>❌ パス</button>
+                    </div>
                     <div>選択中の牌: <span id="selectedTile">なし</span></div>
                     <div>操作プレイヤー: <span id="selectedPlayer">プレイヤー1</span></div>
                     <div>モード: <span id="currentMode">通常表示</span></div>
@@ -185,6 +193,8 @@
         let selectedTileId = null;
         let selectedPlayerId = null;
         let debugMode = false;
+        let availableMelds = [];
+        let lastDiscardInfo = null;
 
         function log(message) {
             const logDiv = document.getElementById('log');
@@ -305,6 +315,11 @@
                     selectedPlayerId = null;
                     updateGameDisplay();
                     log(`🀄 ${targetPlayer.name}の捨牌成功: ${selectedTile.displayName}`);
+                    
+                    // 鳴き機会をチェック
+                    if (debugMode) {
+                        checkMeldOpportunities();
+                    }
                 } else {
                     log(`❌ 捨牌失敗: ${result.message}`);
                 }
@@ -491,6 +506,11 @@
                         ${player.hand.discards.length > 0 ? `
                             <div><strong>捨牌:</strong> ${player.hand.discards.map(tile => tile.unicode).join(' ')}</div>
                         ` : ''}
+                        ${player.hand.melds && player.hand.melds.length > 0 ? `
+                            <div><strong>鳴き:</strong> ${player.hand.melds.map(meld => 
+                                `[${meld.type.toUpperCase()}: ${meld.tiles.map(t => t.unicode).join('')}]`
+                            ).join(' ')}</div>
+                        ` : ''}
                     </div>
                 `;
             }).join('');
@@ -621,6 +641,141 @@
             
             if (currentGameState) {
                 updateGameDisplay();
+            }
+        }
+
+        // 鳴き処理関数
+        async function processMeld(meldType) {
+            if (!currentGameId || !lastDiscardInfo || availableMelds.length === 0) {
+                log(`❌ 鳴きできません: 情報不足`);
+                return;
+            }
+
+            const targetPlayerId = selectedPlayerId !== null ? selectedPlayerId : currentGameState.currentPlayer;
+            const targetPlayer = currentGameState.players[targetPlayerId];
+            
+            // 指定されたタイプの鳴きが可能かチェック
+            const availableMeld = availableMelds.find(m => m.type === meldType);
+            if (!availableMeld) {
+                log(`❌ ${meldType}はできません`);
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/game/${currentGameId}/action`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: meldType,
+                        playerId: targetPlayer.id,
+                        tile: lastDiscardInfo.tile,
+                        meld: availableMeld
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.status === 'OK') {
+                    currentGameState = result.data.gameState;
+                    updateGameDisplay();
+                    hideMeldButtons();
+                    log(`🔗 ${targetPlayer.name}が${meldType}しました`);
+                } else {
+                    log(`❌ ${meldType}失敗: ${result.message}`);
+                }
+            } catch (error) {
+                log(`❌ エラー: ${error.message}`);
+            }
+        }
+
+        // 鳴きパス
+        async function passMeld() {
+            if (!currentGameId || !lastDiscardInfo) return;
+
+            const targetPlayerId = selectedPlayerId !== null ? selectedPlayerId : currentGameState.currentPlayer;
+            const targetPlayer = currentGameState.players[targetPlayerId];
+
+            try {
+                const response = await fetch(`/api/game/${currentGameId}/action`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'pass',
+                        playerId: targetPlayer.id
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.status === 'OK') {
+                    currentGameState = result.data.gameState;
+                    updateGameDisplay();
+                    hideMeldButtons();
+                    log(`❌ ${targetPlayer.name}がパスしました`);
+                } else {
+                    log(`❌ パス失敗: ${result.message}`);
+                }
+            } catch (error) {
+                log(`❌ エラー: ${error.message}`);
+            }
+        }
+
+        // 鳴きボタン表示
+        function showMeldButtons(melds, discardInfo) {
+            availableMelds = melds;
+            lastDiscardInfo = discardInfo;
+            
+            const meldButtonsDiv = document.getElementById('meldButtons');
+            meldButtonsDiv.style.display = 'block';
+            
+            // 各ボタンの有効/無効状態を設定
+            document.getElementById('chiBtn').disabled = !melds.some(m => m.type === 'chi');
+            document.getElementById('ponBtn').disabled = !melds.some(m => m.type === 'pon');
+            document.getElementById('kanBtn').disabled = !melds.some(m => m.type === 'kan');
+            document.getElementById('passBtn').disabled = false;
+            
+            log(`🔗 鳴き可能: ${melds.map(m => m.type).join(', ')}`);
+        }
+
+        // 鳴きボタン非表示
+        function hideMeldButtons() {
+            document.getElementById('meldButtons').style.display = 'none';
+            availableMelds = [];
+            lastDiscardInfo = null;
+        }
+
+        // 鳴き機会チェック
+        async function checkMeldOpportunities() {
+            if (!currentGameId || !currentGameState || !currentGameState.lastDiscard) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/game/${currentGameId}/melds`);
+                const result = await response.json();
+                
+                if (result.status === 'OK' && result.data.opportunities.length > 0) {
+                    const opportunities = result.data.opportunities;
+                    log(`🔗 鳴き機会発見: ${opportunities.length}人が鳴き可能`);
+                    
+                    // 現在選択中のプレイヤーが鳴き可能かチェック
+                    const targetPlayerId = selectedPlayerId !== null ? selectedPlayerId : currentGameState.currentPlayer;
+                    const targetPlayerIdStr = `player_${targetPlayerId}`;
+                    
+                    const playerOpportunity = opportunities.find(opp => opp.playerId === targetPlayerIdStr);
+                    if (playerOpportunity) {
+                        showMeldButtons(playerOpportunity.possibleMelds, {
+                            tile: currentGameState.lastDiscard,
+                            fromPlayer: currentGameState.lastDiscardPlayer
+                        });
+                    } else {
+                        // 他のプレイヤーが鳴き可能な場合の通知
+                        const playerNames = opportunities.map(opp => opp.playerName).join(', ');
+                        log(`💡 ${playerNames}が鳴き可能です`);
+                    }
+                }
+            } catch (error) {
+                log(`❌ 鳴き機会チェックエラー: ${error.message}`);
             }
         }
 

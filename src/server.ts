@@ -316,6 +316,35 @@ app.get('/api/game/:gameId/debug', (req, res) => {
   }
 });
 
+// 鳴き機会取得API
+app.get('/api/game/:gameId/melds', (req, res) => {
+  try {
+    const { gameId } = req.params;
+    const result = gameSessionManager.getMeldOpportunities(gameId);
+
+    if (!result.success) {
+      return res.status(404).json({
+        status: 'Error',
+        message: result.message,
+      });
+    }
+
+    return res.json({
+      status: 'OK',
+      message: '鳴き機会取得成功',
+      data: {
+        opportunities: result.opportunities,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'Error',
+      message: '鳴き機会取得エラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // 手動ツモAPI
 app.post('/api/game/:gameId/draw', (req, res) => {
   try {
