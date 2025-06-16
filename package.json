@@ -4,7 +4,7 @@
   "description": "麻雀ゲーム Hello World テスト",
   "main": "server.js",
   "scripts": {
-    "start": "node dist/server.js",
+    "start": "node dist/src/server.js",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "nodemon --exec ts-node src/server.ts",
     "dev:client": "echo \"Client dev server will be added later\"",

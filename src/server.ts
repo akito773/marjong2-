@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
+import { TileManager } from './models/TileManager';
 
 const app = express();
 const server = createServer(app);
@@ -33,6 +34,74 @@ app.get('/api/health', (_req, res) => {
     environment: process.env.NODE_ENV || 'development',
     socketConnections: io.engine.clientsCount,
   });
+});
+
+// 牌管理システムテスト用API
+app.get('/api/tiles/test', (_req, res) => {
+  try {
+    const tileManager = new TileManager(true);
+    const hands = tileManager.dealInitialHands();
+    const debugInfo = tileManager.getDebugInfo();
+
+    res.json({
+      status: 'OK',
+      message: '牌管理システムテスト',
+      data: {
+        debugInfo,
+        sampleHands: hands.map((hand, index) => ({
+          playerId: index,
+          tileCount: hand.tiles.length,
+          tiles: hand.tiles.map(tile => ({
+            displayName: tile.displayName,
+            unicode: tile.unicode,
+            isRed: tile.isRed,
+            suit: tile.suit,
+            rank: tile.rank,
+            honor: tile.honor,
+          })),
+        })),
+        doraInfo: {
+          indicators: debugInfo.doraIndicators.map(tile => tile.unicode),
+          actualDora: debugInfo.doraTiles.map(tile => tile.unicode),
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'Error',
+      message: '牌管理システムエラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// 牌の一覧取得API
+app.get('/api/tiles/all', (_req, res) => {
+  try {
+    const tileManager = new TileManager(true);
+    const debugInfo = tileManager.getDebugInfo();
+
+    res.json({
+      status: 'OK',
+      message: '全牌一覧',
+      data: {
+        totalTiles: debugInfo.totalTiles,
+        tilesByType: {
+          man: Array.from({ length: 9 }, (_, i) => `${i + 1}m`),
+          pin: Array.from({ length: 9 }, (_, i) => `${i + 1}p`),
+          sou: Array.from({ length: 9 }, (_, i) => `${i + 1}s`),
+          honors: ['東', '南', '西', '北', '白', '發', '中'],
+          redDora: ['赤5m', '赤5p', '赤5s'],
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'Error',
+      message: '牌一覧取得エラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
 });
 
 // Socket.IO接続処理
