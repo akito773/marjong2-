@@ -9,6 +9,7 @@ yarn-error.log*
 /client/dist/
 /server/build/
 /server/dist/
+/dist/
 
 # Environment variables
 .env
