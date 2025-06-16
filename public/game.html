@@ -81,6 +81,24 @@
             background: #ff6b6b;
             color: white;
         }
+        .debug-mode .player-info {
+            border: 2px solid #00ff00;
+        }
+        .debug-info {
+            background: rgba(0,255,0,0.1);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+        .waiting-tiles {
+            color: #ffff00;
+            font-weight: bold;
+        }
+        .possible-melds {
+            color: #ff9500;
+            font-weight: bold;
+        }
         .status {
             margin: 10px 0;
             padding: 10px;
@@ -130,7 +148,9 @@
                     <h4>🎲 ゲーム操作</h4>
                     <button class="button" onclick="refreshGameState()">状態更新</button>
                     <button class="button" onclick="testDiscard()" id="discardBtn" disabled>選択牌を捨牌</button>
+                    <button class="button" onclick="toggleDebugMode()" id="debugBtn">🔍 デバッグモード</button>
                     <div>選択中の牌: <span id="selectedTile">なし</span></div>
+                    <div>モード: <span id="currentMode">通常表示</span></div>
                 </div>
                 
                 <div>
@@ -161,6 +181,7 @@
         let currentGameId = null;
         let currentGameState = null;
         let selectedTileId = null;
+        let debugMode = false;
 
         function log(message) {
             const logDiv = document.getElementById('log');
@@ -207,13 +228,18 @@
             if (!currentGameId) return;
 
             try {
-                const response = await fetch(`/api/game/${currentGameId}`);
+                const endpoint = debugMode ? `/api/game/${currentGameId}/debug` : `/api/game/${currentGameId}`;
+                const response = await fetch(endpoint);
                 const result = await response.json();
                 
                 if (result.status === 'OK') {
-                    currentGameState = result.data.gameState;
+                    currentGameState = result.data.gameState || result.data;
+                    if (debugMode && result.data.playerDetails) {
+                        // デバッグモード時は詳細情報も保存
+                        currentGameState.debugDetails = result.data;
+                    }
                     updateGameDisplay();
-                    log(`🔄 ゲーム状態更新完了`);
+                    log(`🔄 ゲーム状態更新完了 ${debugMode ? '(デバッグ情報含む)' : ''}`);
                 } else {
                     log(`❌ 状態取得失敗: ${result.message}`);
                 }
@@ -293,6 +319,12 @@
                 <strong>本場:</strong> ${currentGameState.round.honbaCount}<br>
                 <strong>リーチ棒:</strong> ${currentGameState.round.riichiSticks}<br>
                 <strong>ドラ:</strong> ${currentGameState.doraIndicators.map(tile => tile.unicode).join(' ')}
+                ${debugMode && currentGameState.debugDetails && currentGameState.debugDetails.wallInfo ? `
+                    <br><strong>🔍 牌山情報:</strong><br>
+                    <strong>引き済み:</strong> ${currentGameState.debugDetails.wallInfo.totalDrawn}枚<br>
+                    <strong>残り枚数:</strong> ${currentGameState.debugDetails.wallInfo.remainingTiles}枚<br>
+                    <strong>ドラ枚数:</strong> ${currentGameState.debugDetails.wallInfo.doraCount}枚
+                ` : ''}
             `;
 
             // プレイヤー情報表示
@@ -300,17 +332,39 @@
             playersInfo.innerHTML = currentGameState.players.map((player, index) => {
                 const isCurrentPlayer = index === currentGameState.currentPlayer;
                 const isCurrentUser = index === 0; // 仮に最初のプレイヤーをユーザーとする
+                const showHand = debugMode || isCurrentUser;
                 
                 return `
                     <div class="player-info ${isCurrentPlayer ? 'current-player' : ''}">
                         <h4>${player.name} (${player.wind}風) ${player.isDealer ? '👑' : ''} ${isCurrentPlayer ? '🎯' : ''}</h4>
                         <div><strong>点数:</strong> ${player.score}点</div>
                         <div><strong>手牌:</strong> ${player.hand.tiles.length}枚</div>
-                        ${isCurrentUser ? `
+                        ${showHand ? `
                             <div class="tiles">
                                 ${player.hand.tiles.map(tile => 
-                                    `<div class="tile" data-tile-id="${tile.id}" onclick="selectTile(${tile.id}, '${tile.displayName}')">${tile.unicode} ${tile.displayName}</div>`
+                                    `<div class="tile" data-tile-id="${tile.id}" ${isCurrentUser ? `onclick="selectTile(${tile.id}, '${tile.displayName}')"` : ''}>${tile.unicode} ${tile.displayName}</div>`
                                 ).join('')}
+                            </div>
+                        ` : `
+                            <div class="tiles">
+                                ${Array(player.hand.tiles.length).fill('🀫').join(' ')} (${player.hand.tiles.length}枚)
+                            </div>
+                        `}
+                        ${debugMode ? `
+                            <div class="debug-info">
+                                <div><strong>🔍 デバッグ情報:</strong></div>
+                                <div>手牌詳細: ${player.hand.tiles.map(t => t.displayName).join(', ')}</div>
+                                <div>状態: ${player.status}</div>
+                                ${currentGameState.debugDetails && currentGameState.debugDetails.playerDetails ? `
+                                    <div>牌種類数: ${currentGameState.debugDetails.playerDetails[index].handAnalysis.uniqueTiles}種類</div>
+                                    <div>萬子: ${currentGameState.debugDetails.playerDetails[index].handAnalysis.suitDistribution.man}枚</div>
+                                    <div>筒子: ${currentGameState.debugDetails.playerDetails[index].handAnalysis.suitDistribution.pin}枚</div>
+                                    <div>索子: ${currentGameState.debugDetails.playerDetails[index].handAnalysis.suitDistribution.sou}枚</div>
+                                    <div>字牌: ${currentGameState.debugDetails.playerDetails[index].handAnalysis.suitDistribution.honor}枚</div>
+                                    <div>聴牌判定: ${currentGameState.debugDetails.playerDetails[index].handAnalysis.isReadyHand ? '可能性あり' : 'なし'}</div>
+                                ` : ''}
+                                <div class="waiting-tiles">待ち牌: ${getWaitingTiles(player).join(', ') || 'なし'}</div>
+                                <div class="possible-melds">可能な鳴き: ${getPossibleMelds(player).join(', ') || 'なし'}</div>
                             </div>
                         ` : ''}
                         ${player.hand.discards.length > 0 ? `
@@ -352,6 +406,67 @@
                 }
             } catch (error) {
                 log(`❌ エラー: ${error.message}`);
+            }
+        }
+
+        // デバッグ用ヘルパー関数
+        function getWaitingTiles(player) {
+            // 簡易的な待ち牌判定（実際はより複雑な実装が必要）
+            const tiles = player.hand.tiles;
+            if (tiles.length % 3 !== 1) return [];
+            
+            // TODO: 実際の待ち牌計算ロジック
+            return ['仮実装'];
+        }
+        
+        function getPossibleMelds(player) {
+            // 簡易的な鳴き可能判定
+            const melds = [];
+            
+            // TODO: 実際の鳴き判定ロジック
+            if (currentGameState && currentGameState.lastDiscard) {
+                const lastDiscard = currentGameState.lastDiscard;
+                
+                // ポン判定（同じ牌が2枚以上）
+                const sameCount = player.hand.tiles.filter(t => 
+                    t.suit === lastDiscard.suit && t.rank === lastDiscard.rank && t.honor === lastDiscard.honor
+                ).length;
+                if (sameCount >= 2) {
+                    melds.push('ポン');
+                }
+                
+                // チー判定（順子の可能性、簡易版）
+                if (lastDiscard.suit && lastDiscard.rank) {
+                    const suit = lastDiscard.suit;
+                    const rank = lastDiscard.rank;
+                    const hasNeighbors = player.hand.tiles.some(t => 
+                        t.suit === suit && Math.abs(t.rank - rank) <= 2
+                    );
+                    if (hasNeighbors) {
+                        melds.push('チー');
+                    }
+                }
+            }
+            
+            return melds;
+        }
+
+        // デバッグモード切り替え
+        function toggleDebugMode() {
+            debugMode = !debugMode;
+            document.getElementById('currentMode').textContent = debugMode ? '🔍 デバッグモード' : '通常表示';
+            document.getElementById('debugBtn').textContent = debugMode ? '👁️ 通常モード' : '🔍 デバッグモード';
+            
+            if (debugMode) {
+                document.body.classList.add('debug-mode');
+                log('🔍 デバッグモード ON - 全プレイヤー情報表示');
+            } else {
+                document.body.classList.remove('debug-mode');
+                log('👁️ 通常モード ON - 自分の手牌のみ表示');
+            }
+            
+            if (currentGameState) {
+                updateGameDisplay();
             }
         }
 

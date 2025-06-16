@@ -223,6 +223,63 @@ app.get('/api/game/:gameId', (req, res) => {
   }
 });
 
+// デバッグ情報専用API
+app.get('/api/game/:gameId/debug', (req, res) => {
+  try {
+    const { gameId } = req.params;
+    const game = gameSessionManager.getGame(gameId);
+    
+    if (!game) {
+      return res.status(404).json({
+        status: 'Error',
+        message: 'ゲームが見つかりません',
+      });
+    }
+
+    const gameState = game.getGameState();
+    const debugInfo = game.getDebugInfo();
+
+    // より詳細なデバッグ情報を追加
+    const detailedDebug = {
+      gameState,
+      debugInfo,
+      playerDetails: gameState.players.map((player, index) => ({
+        ...player,
+        handAnalysis: {
+          tileCount: player.hand.tiles.length,
+          uniqueTiles: [...new Set(player.hand.tiles.map(t => t.displayName))].length,
+          suitDistribution: {
+            man: player.hand.tiles.filter(t => t.suit === 'man').length,
+            pin: player.hand.tiles.filter(t => t.suit === 'pin').length,
+            sou: player.hand.tiles.filter(t => t.suit === 'sou').length,
+            honor: player.hand.tiles.filter(t => t.honor).length,
+          },
+          // 简易的な待ち牌情報（実装予定）
+          isReadyHand: player.hand.tiles.length % 3 === 1,
+          discardCount: player.hand.discards.length,
+        }
+      })),
+      wallInfo: {
+        remainingTiles: gameState.remainingTiles,
+        doraCount: gameState.doraIndicators.length,
+        totalDrawn: 136 - gameState.remainingTiles - 14, // 王牌14枚
+      }
+    };
+
+    return res.json({
+      status: 'OK',
+      message: 'デバッグ情報取得成功',
+      data: detailedDebug,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'Error',
+      message: 'デバッグ情報取得エラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // プレイヤーアクション実行API
 app.post('/api/game/:gameId/action', (req, res) => {
   try {
