@@ -149,6 +149,7 @@
                     <button class="button" onclick="refreshGameState()">状態更新</button>
                     <button class="button" onclick="testDiscard()" id="discardBtn" disabled>選択牌を捨牌</button>
                     <button class="button" onclick="manualDraw()" id="drawBtn" disabled>🎯 ツモ</button>
+                    <button class="button" onclick="executeAI()" id="aiBtn">🤖 AI実行</button>
                     <button class="button" onclick="toggleDebugMode()" id="debugBtn">🔍 デバッグモード</button>
                     
                     <!-- 鳴き処理ボタン -->
@@ -866,6 +867,55 @@
                 tsumoBtn.disabled = true;
                 tsumoBtn.textContent = '🎊 ツモ';
             }
+        }
+
+        // AI実行
+        async function executeAI() {
+            if (!currentGameId) {
+                log(`❌ AI実行できません: ゲーム情報不足`);
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/game/${currentGameId}/ai`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+
+                const result = await response.json();
+                
+                if (result.status === 'OK') {
+                    currentGameState = result.data.gameState;
+                    updateGameDisplay();
+                    
+                    if (result.data.actions && result.data.actions.length > 0) {
+                        const action = result.data.actions[0];
+                        log(`🤖 AI行動: ${action.description || action.type}`);
+                    } else {
+                        log(`🤖 AI行動なし`);
+                    }
+                } else {
+                    log(`❌ AI実行失敗: ${result.message}`);
+                }
+            } catch (error) {
+                log(`❌ エラー: ${error.message}`);
+            }
+        }
+
+        // 自動AI実行（連続実行）
+        async function autoAI() {
+            if (!currentGameId || !currentGameState) return;
+            
+            const currentPlayer = currentGameState.players[currentGameState.currentPlayer];
+            if (!currentPlayer || !currentPlayer.isBot) return;
+            
+            // 2秒後にAI実行
+            setTimeout(async () => {
+                await executeAI();
+                // 再帰的に次のAIをチェック
+                setTimeout(() => autoAI(), 1000);
+            }, 2000);
         }
 
         // 初期化

@@ -4,6 +4,7 @@ import { Tile } from '../../shared/types/Tile';
 import { TileManager } from './TileManager';
 import { Player } from './Player';
 import { HandAnalyzer } from '../utils/HandAnalyzer';
+import { MahjongAI } from '../ai/MahjongAI';
 
 export class GameManager {
   private gameState: GameState;
@@ -543,6 +544,59 @@ export class GameManager {
   setDebugMode(enabled: boolean): void {
     this.debugMode = enabled;
     console.log(`🔧 デバッグモード: ${enabled ? 'ON' : 'OFF'}`);
+  }
+
+  // AI自動実行
+  executeAIAction(): GameAction[] {
+    if (this.debugMode) {
+      return []; // デバッグモード時はAI自動実行しない
+    }
+
+    const currentPlayerIndex = this.gameState.currentPlayer;
+    const currentPlayer = this.players[currentPlayerIndex];
+    
+    if (!currentPlayer.isBot) {
+      return []; // 人間プレイヤーの場合は何もしない
+    }
+
+    // AI行動決定
+    const context = {
+      hasDrawn: currentPlayer.hand.tiles.length === 14,
+      lastDiscard: this.gameState.lastDiscard,
+      lastDiscardPlayer: this.gameState.lastDiscardPlayer
+    };
+
+    const aiDecision = MahjongAI.decideAction(currentPlayer, this.gameState, context);
+    
+    if (!aiDecision) {
+      return []; // 何もしない
+    }
+
+    // AI決定を実行
+    try {
+      const action: PlayerAction = {
+        type: aiDecision.type as any,
+        playerId: currentPlayer.id,
+        tile: aiDecision.tile,
+        meld: aiDecision.meldType ? this.findMeldForType(currentPlayer, aiDecision.tile!, aiDecision.meldType) : undefined,
+        priority: 1,
+        timestamp: Date.now()
+      };
+
+      console.log(`🤖 ${currentPlayer.name} AI行動: ${aiDecision.type}`);
+      return this.processAction(action);
+    } catch (error) {
+      console.error(`❌ AI行動エラー (${currentPlayer.name}):`, error);
+      return [];
+    }
+  }
+
+  // 指定されたタイプの鳴きメルドを探す
+  private findMeldForType(player: Player, tile: Tile, meldType: string): any {
+    if (!this.gameState.lastDiscardPlayer) return null;
+    
+    const possibleMelds = player.canMeld(tile, this.gameState.lastDiscardPlayer);
+    return possibleMelds.find(m => m.type === meldType) || null;
   }
 
   // 鳴き機会の取得

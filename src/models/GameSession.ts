@@ -156,6 +156,39 @@ export class GameSessionManager {
     }
   }
 
+  // AI自動実行
+  executeAI(gameId: string): {
+    success: boolean;
+    actions?: any[];
+    gameState?: any;
+    message?: string;
+  } {
+    const game = this.getGame(gameId);
+    if (!game) {
+      return {
+        success: false,
+        message: `ゲームが見つかりません: ${gameId}`
+      };
+    }
+
+    try {
+      const actions = game.executeAIAction();
+      const gameState = game.getGameState();
+      
+      return {
+        success: true,
+        actions,
+        gameState,
+        message: actions.length > 0 ? 'AI行動実行' : 'AI行動なし'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
   // アクティブなゲーム一覧
   getActiveGames(): string[] {
     return Array.from(this.activeSessions.keys());
