@@ -209,6 +209,11 @@ export class GameManager {
       throw new Error(`Not ${player.name}'s turn`);
     }
 
+    // 手牌枚数チェック（14枚の時のみ捨牌可能）
+    if (player.hand.tiles.length !== 14) {
+      throw new Error(`${player.name}の手牌は${player.hand.tiles.length}枚です。捨牌は14枚の時のみ可能です`);
+    }
+
     player.discardTile(action.tile);
 
     // 他のプレイヤーの鳴き判定
@@ -230,6 +235,9 @@ export class GameManager {
         this.setNextPlayerTurn();
       }
     }
+
+    // ゲーム状態を更新
+    this.updateGameState();
 
     return [{
       id: `discard_${Date.now()}`,
@@ -374,12 +382,24 @@ export class GameManager {
       return { success: false, message: `${player.name}のターンではありません` };
     }
 
+    // 手牌枚数チェック（13枚の時のみツモ可能）
+    if (player.hand.tiles.length !== 13) {
+      return { 
+        success: false, 
+        message: `${player.name}の手牌は${player.hand.tiles.length}枚です。ツモは13枚の時のみ可能です` 
+      };
+    }
+
     const tile = this.tileManager.drawTile();
     if (!tile) {
       return { success: false, message: '牌山に牌がありません' };
     }
 
     player.drawTile(tile);
+    
+    // ゲーム状態を更新
+    this.updateGameState();
+    
     return { 
       success: true, 
       tile: tile,

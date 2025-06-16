@@ -274,6 +274,12 @@
                 return;
             }
 
+            // 手牌枚数チェック（14枚の時のみ捨牌可能）
+            if (targetPlayer.hand.tiles.length !== 14) {
+                log(`❌ ${targetPlayer.name}の手牌は${targetPlayer.hand.tiles.length}枚です。捨牌は14枚の時のみ可能です`);
+                return;
+            }
+
             // ターン外プレイヤーの操作チェック（デバッグモード時は許可）
             if (!debugMode && targetPlayerId !== currentGameState.currentPlayer) {
                 log(`❌ ${targetPlayer.name}のターンではありません`);
@@ -312,7 +318,14 @@
             selectedTileId = tileId;
             selectedPlayerId = playerId;
             document.getElementById('selectedTile').textContent = displayName;
-            document.getElementById('discardBtn').disabled = false;
+            
+            // 捨牌ボタンの状態更新（14枚の時のみ有効）
+            if (currentGameState && playerId !== null) {
+                const player = currentGameState.players[playerId];
+                document.getElementById('discardBtn').disabled = player.hand.tiles.length !== 14;
+            } else {
+                document.getElementById('discardBtn').disabled = false;
+            }
             
             // 選択状態の見た目更新
             document.querySelectorAll('.tile').forEach(tile => tile.classList.remove('selected'));
