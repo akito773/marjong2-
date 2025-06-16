@@ -361,7 +361,17 @@
         // ツモボタン状態更新
         function updateDrawButtonState() {
             const drawBtn = document.getElementById('drawBtn');
-            if (!currentGameState || !debugMode) {
+            
+            // デバッグモード時のみ表示
+            if (!debugMode) {
+                drawBtn.style.display = 'none';
+                drawBtn.disabled = true;
+                return;
+            }
+            
+            drawBtn.style.display = 'inline-block';
+            
+            if (!currentGameState) {
                 drawBtn.disabled = true;
                 return;
             }
@@ -488,7 +498,13 @@
             // 捨牌ボタンの状態更新
             const currentPlayer = currentGameState.players[currentGameState.currentPlayer];
             const isUserTurn = currentGameState.currentPlayer === 0;
-            document.getElementById('discardBtn').style.display = isUserTurn ? 'inline-block' : 'none';
+            
+            // デバッグモード時は常に表示、通常モードは自分のターンのみ表示
+            if (debugMode) {
+                document.getElementById('discardBtn').style.display = 'inline-block';
+            } else {
+                document.getElementById('discardBtn').style.display = isUserTurn ? 'inline-block' : 'none';
+            }
             
             // ツモボタンの状態更新
             updateDrawButtonState();
