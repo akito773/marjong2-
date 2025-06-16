@@ -3,6 +3,7 @@ import path from 'path';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
 import { TileManager } from './models/TileManager';
+import { GameManager } from './models/GameManager';
 
 const app = express();
 const server = createServer(app);
@@ -99,6 +100,77 @@ app.get('/api/tiles/all', (_req, res) => {
     res.status(500).json({
       status: 'Error',
       message: '牌一覧取得エラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// ゲーム管理システムテスト用API
+app.get('/api/game/test', (_req, res) => {
+  try {
+    const gameManager = new GameManager(
+      'test_game_' + Date.now(),
+      ['プレイヤー1', 'プレイヤー2', 'プレイヤー3', 'プレイヤー4']
+    );
+
+    gameManager.startGame();
+    const gameState = gameManager.getGameState();
+    const debugInfo = gameManager.getDebugInfo();
+
+    res.json({
+      status: 'OK',
+      message: 'ゲーム管理システムテスト',
+      data: {
+        gameId: gameState.id,
+        phase: gameState.phase,
+        currentPlayer: debugInfo.currentPlayer,
+        round: gameState.round,
+        debugInfo,
+        samplePlayers: gameState.players.map(player => ({
+          name: player.name,
+          position: player.position,
+          handSize: player.hand.tiles.length,
+          score: player.score,
+          isDealer: player.isDealer,
+          status: player.status,
+          wind: player.wind,
+          sampleTiles: player.hand.tiles.slice(0, 5).map(tile => ({
+            displayName: tile.displayName,
+            unicode: tile.unicode,
+            isRed: tile.isRed,
+          })),
+        })),
+        doraInfo: {
+          indicators: gameState.doraIndicators.map(tile => tile.unicode),
+          remaining: gameState.remainingTiles,
+        },
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'Error',
+      message: 'ゲーム管理システムエラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// プレイヤーアクションテスト用API
+app.post('/api/game/:gameId/action', (req, res) => {
+  try {
+    // TODO: 実際のゲーム管理実装
+    res.json({
+      status: 'OK',
+      message: 'プレイヤーアクション処理（未実装）',
+      data: {
+        action: req.body,
+        gameId: req.params.gameId,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'Error',
+      message: 'アクション処理エラー',
       error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
