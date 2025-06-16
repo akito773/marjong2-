@@ -156,7 +156,13 @@
                         <button class="button" onclick="processMeld('chi')" id="chiBtn" disabled>🔗 チー</button>
                         <button class="button" onclick="processMeld('pon')" id="ponBtn" disabled>⚫ ポン</button>
                         <button class="button" onclick="processMeld('kan')" id="kanBtn" disabled>🟩 カン</button>
+                        <button class="button" onclick="processWin('ron')" id="ronBtn" disabled>🎉 ロン</button>
                         <button class="button" onclick="passMeld()" id="passBtn" disabled>❌ パス</button>
+                    </div>
+                    
+                    <!-- 和了ボタン -->
+                    <div id="winButtons" style="margin-top: 10px;">
+                        <button class="button" onclick="processWin('tsumo')" id="tsumoBtn" disabled>🎊 ツモ</button>
                     </div>
                     <div>選択中の牌: <span id="selectedTile">なし</span></div>
                     <div>操作プレイヤー: <span id="selectedPlayer">プレイヤー1</span></div>
@@ -528,6 +534,9 @@
             
             // ツモボタンの状態更新
             updateDrawButtonState();
+            
+            // 和了ボタンの状態更新
+            updateWinButtons();
         }
 
         // アクティブゲーム一覧取得
@@ -732,6 +741,7 @@
             document.getElementById('chiBtn').disabled = !melds.some(m => m.type === 'chi');
             document.getElementById('ponBtn').disabled = !melds.some(m => m.type === 'pon');
             document.getElementById('kanBtn').disabled = !melds.some(m => m.type === 'kan');
+            document.getElementById('ronBtn').disabled = false; // ロンは常に選択可能（サーバー側で判定）
             document.getElementById('passBtn').disabled = false;
             
             log(`🔗 鳴き可能: ${melds.map(m => m.type).join(', ')}`);
@@ -776,6 +786,85 @@
                 }
             } catch (error) {
                 log(`❌ 鳴き機会チェックエラー: ${error.message}`);
+            }
+        }
+
+        // 和了処理
+        async function processWin(winType) {
+            if (!currentGameId) {
+                log(`❌ 和了できません: ゲーム情報不足`);
+                return;
+            }
+
+            const targetPlayerId = selectedPlayerId !== null ? selectedPlayerId : currentGameState.currentPlayer;
+            const targetPlayer = currentGameState.players[targetPlayerId];
+
+            try {
+                const requestBody = {
+                    type: winType,
+                    playerId: targetPlayer.id
+                };
+
+                // ロンの場合は最後の捨牌を追加
+                if (winType === 'ron' && currentGameState.lastDiscard) {
+                    requestBody.tile = currentGameState.lastDiscard;
+                }
+
+                const response = await fetch(`/api/game/${currentGameId}/action`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+
+                const result = await response.json();
+                
+                if (result.status === 'OK') {
+                    currentGameState = result.data.gameState;
+                    updateGameDisplay();
+                    hideMeldButtons();
+                    
+                    // 和了情報を表示
+                    const actions = result.data.actions || [];
+                    const winAction = actions.find(action => action.type === 'win');
+                    if (winAction && winAction.data && winAction.data.yaku) {
+                        log(`🎉 ${targetPlayer.name}が${winType}和了！役: ${winAction.data.yaku.join('・')}`);
+                    } else {
+                        log(`🎉 ${targetPlayer.name}が${winType}和了しました！`);
+                    }
+                } else {
+                    log(`❌ ${winType}失敗: ${result.message}`);
+                }
+            } catch (error) {
+                log(`❌ エラー: ${error.message}`);
+            }
+        }
+
+        // ツモボタンの状態更新（和了可能性チェック含む）
+        function updateWinButtons() {
+            const tsumoBtn = document.getElementById('tsumoBtn');
+            
+            if (!debugMode) {
+                tsumoBtn.style.display = 'none';
+                return;
+            }
+            
+            tsumoBtn.style.display = 'inline-block';
+            
+            if (!currentGameState) {
+                tsumoBtn.disabled = true;
+                return;
+            }
+            
+            const targetPlayerId = selectedPlayerId !== null ? selectedPlayerId : currentGameState.currentPlayer;
+            const targetPlayer = currentGameState.players[targetPlayerId];
+            
+            // 手牌が14枚の時にツモボタンを有効化（簡易判定）
+            if (targetPlayer && targetPlayer.hand.tiles.length === 14) {
+                tsumoBtn.disabled = false;
+                tsumoBtn.textContent = `🎊 ${targetPlayer.name}ツモ`;
+            } else {
+                tsumoBtn.disabled = true;
+                tsumoBtn.textContent = '🎊 ツモ';
             }
         }
 

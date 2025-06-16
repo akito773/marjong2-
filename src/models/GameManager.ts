@@ -3,6 +3,7 @@ import { Player as IPlayer, PlayerAction } from '../../shared/types/Player';
 import { Tile } from '../../shared/types/Tile';
 import { TileManager } from './TileManager';
 import { Player } from './Player';
+import { HandAnalyzer } from '../utils/HandAnalyzer';
 
 export class GameManager {
   private gameState: GameState;
@@ -302,7 +303,25 @@ export class GameManager {
 
   // ツモ処理
   private processTsumo(player: Player): GameAction[] {
-    // TODO: 和了判定と点数計算
+    // 和了判定
+    const isWin = HandAnalyzer.isWinningHand([...player.hand.tiles], [...player.hand.melds]);
+    
+    if (!isWin) {
+      throw new Error(`${player.name}の手牌は和了形ではありません`);
+    }
+
+    // 役判定
+    const yaku = HandAnalyzer.getYaku(
+      [...player.hand.tiles], 
+      [...player.hand.melds], 
+      player.status === 'riichi',
+      true // ツモ
+    );
+
+    if (yaku.length === 0) {
+      throw new Error(`${player.name}の手牌に役がありません`);
+    }
+
     player.setStatus('finished');
     (this.gameState as any).phase = 'finished';
 
@@ -310,14 +329,38 @@ export class GameManager {
       id: `tsumo_${Date.now()}`,
       type: 'win',
       playerId: player.id,
-      description: `${player.name}がツモ和了`,
+      data: { yaku: yaku },
+      description: `${player.name}がツモ和了: ${yaku.join('・')}`,
       timestamp: Date.now(),
     }];
   }
 
   // ロン処理
   private processRon(player: Player, action: PlayerAction): GameAction[] {
-    // TODO: 和了判定と点数計算
+    if (!action.tile || !this.gameState.lastDiscard) {
+      throw new Error('ロンには捨牌が必要です');
+    }
+
+    // ロン牌を手牌に加えて和了判定
+    const tempTiles = [...player.hand.tiles, action.tile];
+    const isWin = HandAnalyzer.isWinningHand(tempTiles, [...player.hand.melds]);
+    
+    if (!isWin) {
+      throw new Error(`${player.name}の手牌は和了形ではありません`);
+    }
+
+    // 役判定
+    const yaku = HandAnalyzer.getYaku(
+      tempTiles, 
+      [...player.hand.melds], 
+      player.status === 'riichi',
+      false // ロン
+    );
+
+    if (yaku.length === 0) {
+      throw new Error(`${player.name}の手牌に役がありません`);
+    }
+
     player.setStatus('finished');
     (this.gameState as any).phase = 'finished';
 
@@ -325,7 +368,8 @@ export class GameManager {
       id: `ron_${Date.now()}`,
       type: 'win',
       playerId: player.id,
-      description: `${player.name}がロン和了`,
+      data: { yaku: yaku, ronTile: action.tile },
+      description: `${player.name}がロン和了: ${yaku.join('・')}`,
       timestamp: Date.now(),
     }];
   }
