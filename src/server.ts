@@ -4,6 +4,7 @@ import { Server } from 'socket.io';
 import { createServer } from 'http';
 import { TileManager } from './models/TileManager';
 import { GameManager } from './models/GameManager';
+import { GameSessionManager } from './models/GameSession';
 
 const app = express();
 const server = createServer(app);
@@ -15,6 +16,9 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
+
+// ゲームセッションマネージャー初期化
+const gameSessionManager = GameSessionManager.getInstance();
 
 // 静的ファイルの配信
 app.use(express.static('public'));
@@ -155,22 +159,126 @@ app.get('/api/game/test', (_req, res) => {
   }
 });
 
-// プレイヤーアクションテスト用API
-app.post('/api/game/:gameId/action', (req, res) => {
+// 新しいゲーム作成API
+app.post('/api/game/create', (req, res) => {
   try {
-    // TODO: 実際のゲーム管理実装
-    res.json({
+    const { playerNames } = req.body;
+    
+    if (!playerNames || !Array.isArray(playerNames) || playerNames.length !== 4) {
+      return res.status(400).json({
+        status: 'Error',
+        message: 'プレイヤー名4人分が必要です',
+      });
+    }
+
+    const gameId = gameSessionManager.createGame(playerNames);
+    const gameState = gameSessionManager.getGameState(gameId);
+
+    return res.json({
       status: 'OK',
-      message: 'プレイヤーアクション処理（未実装）',
+      message: '新しいゲームを作成しました',
       data: {
-        action: req.body,
-        gameId: req.params.gameId,
+        gameId,
+        gameState,
       },
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
+      status: 'Error',
+      message: 'ゲーム作成エラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// ゲーム状態取得API
+app.get('/api/game/:gameId', (req, res) => {
+  try {
+    const { gameId } = req.params;
+    const gameState = gameSessionManager.getGameState(gameId);
+    
+    if (!gameState) {
+      return res.status(404).json({
+        status: 'Error',
+        message: 'ゲームが見つかりません',
+      });
+    }
+
+    const debugInfo = gameSessionManager.getDebugInfo(gameId);
+
+    return res.json({
+      status: 'OK',
+      message: 'ゲーム状態取得成功',
+      data: {
+        gameState,
+        debugInfo,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'Error',
+      message: 'ゲーム状態取得エラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// プレイヤーアクション実行API
+app.post('/api/game/:gameId/action', (req, res) => {
+  try {
+    const { gameId } = req.params;
+    const action = req.body;
+
+    if (!action.type || !action.playerId) {
+      return res.status(400).json({
+        status: 'Error',
+        message: 'アクションタイプとプレイヤーIDが必要です',
+      });
+    }
+
+    const result = gameSessionManager.processPlayerAction(gameId, {
+      ...action,
+      timestamp: Date.now(),
+    });
+
+    if (!result.success) {
+      return res.status(400).json({
+        status: 'Error',
+        message: result.message,
+      });
+    }
+
+    return res.json({
+      status: 'OK',
+      message: result.message,
+      data: {
+        actions: result.actions,
+        gameState: result.gameState,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
       status: 'Error',
       message: 'アクション処理エラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// アクティブゲーム一覧API
+app.get('/api/games', (req, res) => {
+  try {
+    const sessionsInfo = gameSessionManager.getAllSessionsInfo();
+
+    return res.json({
+      status: 'OK',
+      message: 'アクティブゲーム一覧',
+      data: sessionsInfo,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'Error',
+      message: 'ゲーム一覧取得エラー',
       error: error instanceof Error ? error.message : 'Unknown error',
     });
   }

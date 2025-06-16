@@ -113,7 +113,7 @@ export class GameManager {
     // 配牌
     const hands = this.tileManager.dealInitialHands();
     hands.forEach((hand, index) => {
-      this.players[index].setInitialHand(hand.tiles);
+      this.players[index].setInitialHand([...hand.tiles]);
     });
 
     // 親にツモ牌
@@ -134,7 +134,6 @@ export class GameManager {
 
     // ログ追加
     this.addGameAction({
-      id: `action_${Date.now()}`,
       type: 'deal',
       description: `配牌完了。東${this.gameState.round.roundNumber}局開始`,
       timestamp: Date.now(),
@@ -213,6 +212,13 @@ export class GameManager {
     // 他のプレイヤーの鳴き判定
     this.checkMeldOpportunities(action.tile, player.position);
 
+    // 最後の捨牌情報を更新
+    this.gameState = {
+      ...this.gameState,
+      lastDiscard: action.tile,
+      lastDiscardPlayer: player.position,
+    };
+
     // 次のプレイヤーにツモ（鳴きがない場合）
     if (this.actionQueue.length === 0) {
       this.nextTurn();
@@ -239,7 +245,7 @@ export class GameManager {
     }
 
     player.declareRiichi(action.tile);
-    this.gameState.round.riichiSticks++;
+    (this.gameState.round as any).riichiSticks++;
 
     return [{
       id: `riichi_${Date.now()}`,
@@ -278,7 +284,7 @@ export class GameManager {
   private processTsumo(player: Player): GameAction[] {
     // TODO: 和了判定と点数計算
     player.setStatus('finished');
-    this.gameState.phase = 'finished';
+    (this.gameState as any).phase = 'finished';
 
     return [{
       id: `tsumo_${Date.now()}`,
@@ -293,7 +299,7 @@ export class GameManager {
   private processRon(player: Player, action: PlayerAction): GameAction[] {
     // TODO: 和了判定と点数計算
     player.setStatus('finished');
-    this.gameState.phase = 'finished';
+    (this.gameState as any).phase = 'finished';
 
     return [{
       id: `ron_${Date.now()}`,
@@ -325,9 +331,8 @@ export class GameManager {
 
     if (!tile) {
       // 流局
-      this.gameState.phase = 'finished';
+      (this.gameState as any).phase = 'finished';
       this.addGameAction({
-        id: `draw_${Date.now()}`,
         type: 'draw_game',
         description: '流局',
         timestamp: Date.now(),
@@ -336,7 +341,7 @@ export class GameManager {
     }
 
     this.players[nextPlayer].drawTile(tile);
-    this.gameState.currentPlayer = nextPlayer;
+    (this.gameState as any).currentPlayer = nextPlayer;
 
     console.log(`🎯 ${this.players[nextPlayer].name}のターン`);
   }
@@ -412,10 +417,10 @@ export class GameManager {
   private addGameAction(action: Omit<GameAction, 'id'>): void {
     const gameAction: GameAction = {
       ...action,
-      id: action.id || `action_${Date.now()}`,
+      id: `action_${Date.now()}`,
     };
     
-    this.gameState.gameLog.push(gameAction);
+    (this.gameState.gameLog as any).push(gameAction);
     console.log(`📝 ${gameAction.description}`);
   }
 

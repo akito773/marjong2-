@@ -1,6 +1,6 @@
 import { Player as IPlayer, PlayerStatus } from '../../shared/types/Player';
 import { Hand, Meld } from '../../shared/types/Hand';
-import { Tile } from '../../shared/types/Tile';
+import { Tile, Rank } from '../../shared/types/Tile';
 
 export class Player implements IPlayer {
   readonly id: string;
@@ -217,8 +217,8 @@ export class Player implements IPlayer {
 
     // 下位順子（例：4が捨てられた時の 2-3-4）
     if (rank >= 3) {
-      const tile1 = this.findTileInHand(suit, rank - 2);
-      const tile2 = this.findTileInHand(suit, rank - 1);
+      const tile1 = this.findTileInHand(suit, (rank - 2) as Rank);
+      const tile2 = this.findTileInHand(suit, (rank - 1) as Rank);
       if (tile1 && tile2) {
         melds.push({
           id: `chi_${Date.now()}_1`,
@@ -233,8 +233,8 @@ export class Player implements IPlayer {
 
     // 中位順子（例：4が捨てられた時の 3-4-5）
     if (rank >= 2 && rank <= 8) {
-      const tile1 = this.findTileInHand(suit, rank - 1);
-      const tile2 = this.findTileInHand(suit, rank + 1);
+      const tile1 = this.findTileInHand(suit, (rank - 1) as Rank);
+      const tile2 = this.findTileInHand(suit, (rank + 1) as Rank);
       if (tile1 && tile2) {
         melds.push({
           id: `chi_${Date.now()}_2`,
@@ -249,8 +249,8 @@ export class Player implements IPlayer {
 
     // 上位順子（例：4が捨てられた時の 4-5-6）
     if (rank <= 7) {
-      const tile1 = this.findTileInHand(suit, rank + 1);
-      const tile2 = this.findTileInHand(suit, rank + 2);
+      const tile1 = this.findTileInHand(suit, (rank + 1) as Rank);
+      const tile2 = this.findTileInHand(suit, (rank + 2) as Rank);
       if (tile1 && tile2) {
         melds.push({
           id: `chi_${Date.now()}_3`,
