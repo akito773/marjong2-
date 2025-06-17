@@ -255,9 +255,21 @@ export class GameManager {
   }
 
   // 捨牌処理
-  private processDiscard(player: Player, action: PlayerAction): GameAction[] {
-    if (!action.tile) {
-      throw new Error('Discard action requires a tile');
+  private processDiscard(player: Player, action: PlayerAction & { tileId?: number }): GameAction[] {
+    let tileToDiscard: Tile;
+    
+    // タイルの取得（tileIdまたはtileプロパティから）
+    if ((action as any).tileId !== undefined) {
+      const tileId = (action as any).tileId;
+      const foundTile = player.hand.tiles.find(t => t.id === tileId);
+      if (!foundTile) {
+        throw new Error(`指定されたタイル (ID: ${tileId}) が手牌にありません`);
+      }
+      tileToDiscard = foundTile;
+    } else if (action.tile) {
+      tileToDiscard = action.tile;
+    } else {
+      throw new Error('Discard action requires a tile or tileId');
     }
 
     // デバッグモード時はターンチェックをスキップ
@@ -270,15 +282,15 @@ export class GameManager {
       throw new Error(`${player.name}の手牌は${player.hand.tiles.length}枚です。捨牌は14枚の時のみ可能です`);
     }
 
-    player.discardTile(action.tile);
+    player.discardTile(tileToDiscard);
 
     // 他のプレイヤーの鳴き判定
-    this.checkMeldOpportunities(action.tile, player.position);
+    this.checkMeldOpportunities(tileToDiscard, player.position);
 
     // 最後の捨牌情報を更新
     this.gameState = {
       ...this.gameState,
-      lastDiscard: action.tile,
+      lastDiscard: tileToDiscard,
       lastDiscardPlayer: player.position,
     };
 
@@ -300,10 +312,10 @@ export class GameManager {
       type: 'discard',
       playerId: player.id,
       data: { 
-        tile: action.tile,
+        tile: tileToDiscard,
         meldOpportunities: this.actionQueue.length > 0 ? this.actionQueue : undefined
       },
-      description: `${player.name}が${action.tile.displayName}を捨牌`,
+      description: `${player.name}が${tileToDiscard.displayName}を捨牌`,
       timestamp: Date.now(),
     };
 
