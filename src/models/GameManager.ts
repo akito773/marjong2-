@@ -641,9 +641,14 @@ export class GameManager {
       lastDiscardPlayer: this.gameState.lastDiscardPlayer
     };
 
+    console.log(`🔍 AI判断開始: ${currentPlayer.name}, 手牌数: ${currentPlayer.hand.tiles.length}, hasDrawn: ${context.hasDrawn}`);
+    
     const aiDecision = MahjongAI.decideAction(currentPlayer, this.gameState, context);
     
+    console.log(`🔍 AI判断結果: ${currentPlayer.name}`, aiDecision);
+    
     if (!aiDecision) {
+      console.log(`⚠️ AI判断失敗: ${currentPlayer.name} - AI決定がnull`);
       return []; // 何もしない
     }
 
