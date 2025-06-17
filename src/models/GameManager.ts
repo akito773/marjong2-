@@ -46,10 +46,12 @@ export class GameManager {
     // ゲーム状態初期化
     this.gameState = this.createInitialGameState(gameId, settings);
 
-    // AI対戦の場合はデバッグモードを有効にして手動操作を許可
-    if (playerNames.includes('CPU東') || playerNames.includes('CPU南') || playerNames.includes('CPU西')) {
-      this.debugMode = true;
-      console.log(`🔧 デバッグモード有効: 手動操作が可能です`);
+    // デバッグモードはデフォルトで無効（CPUが自動動作する）
+    this.debugMode = false;
+    console.log(`🤖 CPU自動動作モード: CPUプレイヤーが自動的にプレイします`);
+    
+    if (playerNames.includes('CPU北') || playerNames.includes('CPU西') || playerNames.includes('CPU南')) {
+      console.log(`🔧 CPU名検出更新: [${playerNames.join(', ')}]`);
     }
 
     console.log(`🎮 ゲーム開始: ${gameId}`);
@@ -59,7 +61,8 @@ export class GameManager {
   // プレイヤー初期化
   private initializePlayers(playerNames: string[], settings: GameSettings): void {
     this.players = playerNames.map((name, index) => {
-      const isBot = index < settings.botCount;
+      // CPUプレイヤーはname.includes('CPU')で判定
+      const isBot = name.includes('CPU');
       return new Player(
         `player_${index}`,
         name,
@@ -71,6 +74,11 @@ export class GameManager {
 
     // 親設定（最初は座席0）
     this.players[0].setDealer(true);
+    
+    // CPUプレイヤーの確認ログ
+    this.players.forEach((player, index) => {
+      console.log(`👤 プレイヤー${index}: ${player.name} (${player.isBot ? 'CPU' : '人間'})`);
+    });
   }
 
   // 初期ゲーム状態作成
@@ -206,8 +214,19 @@ export class GameManager {
           throw new Error(`Unknown action type: ${action.type}`);
       }
 
+      // アクションをゲームログに追加
+      actions.forEach(action => {
+        this.gameState = {
+          ...this.gameState,
+          gameLog: [...this.gameState.gameLog, action]
+        };
+      });
+      
       // ゲーム状態更新
       this.updateGameState();
+      
+      // CPUターンの自動実行をスケジュール
+      this.scheduleNextCPUAction();
 
     } catch (error) {
       console.error(`❌ アクション処理エラー:`, error);
@@ -861,21 +880,7 @@ export class GameManager {
       currentPlayer: nextPlayerIndex
     };
     
-    // 次のプレイヤーに自動的にツモさせる
-    const nextPlayer = this.players[nextPlayerIndex];
-    if (nextPlayer) {
-      const drawnTile = this.tileManager.drawTile();
-      if (drawnTile) {
-        nextPlayer.drawTile(drawnTile);
-        
-        // ゲームログに記録
-        this.addGameAction({
-          type: 'draw',
-          description: `${nextPlayer.name}がツモ`,
-          timestamp: Date.now(),
-        });
-      }
-    }
+    console.log(`🔄 ターン進行: Player ${nextPlayerIndex} (${this.players[nextPlayerIndex]?.name})`);
   }
 
   private setNextPlayerTurn(): void {
@@ -889,5 +894,55 @@ export class GameManager {
   // デバッグモード用：手動ツモ
   allowManualDraw(): boolean {
     return this.debugMode || this.gameState.phase === 'waiting';
+  }
+
+  // CPUターンの自動実行をスケジュール
+  private scheduleNextCPUAction(): void {
+    if (this.debugMode) {
+      return; // デバッグモード時は自動実行しない
+    }
+
+    const currentPlayer = this.players[this.gameState.currentPlayer];
+    if (!currentPlayer || !currentPlayer.isBot) {
+      return; // 人間プレイヤーの場合は何もしない
+    }
+
+    // 1-3秒後にCPUアクションを実行（リアルな思考時間をシミュレート）
+    const delay = Math.random() * 2000 + 1000; // 1000-3000ms
+    
+    setTimeout(() => {
+      try {
+        console.log(`🤖 ${currentPlayer.name} 自動ターン開始`);
+        
+        // CPUの必要なアクションを判定して実行
+        if (currentPlayer.hand.tiles.length === 13) {
+          // ツモが必要
+          const drawAction: PlayerAction = {
+            type: 'draw',
+            playerId: currentPlayer.id,
+            priority: 1,
+            timestamp: Date.now()
+          };
+          this.processAction(drawAction);
+        } else if (currentPlayer.hand.tiles.length === 14) {
+          // 捨て牌が必要
+          const aiActions = this.executeAIAction();
+          if (aiActions.length === 0) {
+            // AIが判断できない場合はランダムに捨て牌
+            const randomTile = currentPlayer.hand.tiles[Math.floor(Math.random() * currentPlayer.hand.tiles.length)];
+            const discardAction: PlayerAction = {
+              type: 'discard',
+              playerId: currentPlayer.id,
+              tile: randomTile,
+              priority: 1,
+              timestamp: Date.now()
+            };
+            this.processAction(discardAction);
+          }
+        }
+      } catch (error) {
+        console.error(`❌ CPU自動ターンエラー (${currentPlayer.name}):`, error);
+      }
+    }, delay);
   }
 }

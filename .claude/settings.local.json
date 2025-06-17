@@ -15,7 +15,16 @@
       "Bash(sed:*)",
       "Bash(npm start)",
       "Bash(ssh:*)",
-      "Bash(awk:*)"
+      "Bash(awk:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run:*)",
+      "Bash(npm install:*)",
+      "Bash(rg:*)",
+      "Bash(node:*)",
+      "Bash(pkill:*)",
+      "Bash(true)",
+      "Bash(cp:*)",
+      "WebFetch(domain:mahjong.wikidot.com)"
     ],
     "deny": []
   }

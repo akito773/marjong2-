@@ -501,7 +501,7 @@
             <!-- 上側プレイヤー（対面） -->
             <div class="player-area player-top" id="player2">
                 <div class="player-info">
-                    <div class="player-name">CPU南</div>
+                    <div class="player-name">CPU西</div>
                     <div class="player-wind">西</div>
                 </div>
                 <div class="opponent-tiles" id="hand2"></div>
@@ -510,8 +510,8 @@
             <!-- 右側プレイヤー -->
             <div class="player-area player-right" id="player1">
                 <div class="player-info">
-                    <div class="player-name">CPU東</div>
-                    <div class="player-wind">南</div>
+                    <div class="player-name">CPU北</div>
+                    <div class="player-wind">北</div>
                 </div>
                 <div class="opponent-tiles" id="hand1"></div>
             </div>
@@ -519,8 +519,8 @@
             <!-- 左側プレイヤー -->
             <div class="player-area player-left" id="player3">
                 <div class="player-info">
-                    <div class="player-name">CPU西</div>
-                    <div class="player-wind">北</div>
+                    <div class="player-name">CPU南</div>
+                    <div class="player-wind">南</div>
                 </div>
                 <div class="opponent-tiles" id="hand3"></div>
             </div>
@@ -596,6 +596,19 @@
             <button class="btn btn-success" onclick="callTsumo()" id="tsumoBtn">ツモ</button>
             <button class="btn btn-success" onclick="callRon()" id="ronBtn">ロン</button>
             <button class="btn btn-info" onclick="executeAI()" id="aiBtn">AI実行</button>
+        </div>
+        
+        <!-- デバッグパネル -->
+        <div class="debug-panel" style="position: fixed; bottom: 80px; right: 20px; background: rgba(0,0,0,0.9); color: white; padding: 15px; border-radius: 8px; font-size: 0.8rem; z-index: 100;">
+            <div style="font-weight: bold; margin-bottom: 10px;">🔧 デバッグ操作</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <button class="btn" style="background: #6c757d; color: white; padding: 6px; font-size: 0.7rem;" onclick="forceCPUTurn()">CPU強制実行</button>
+                <button class="btn" style="background: #6c757d; color: white; padding: 6px; font-size: 0.7rem;" onclick="showGameLog()">ログ表示</button>
+                <button class="btn" style="background: #6c757d; color: white; padding: 6px; font-size: 0.7rem;" onclick="toggleDebugMode()">デバッグ切替</button>
+                <button class="btn" style="background: #6c757d; color: white; padding: 6px; font-size: 0.7rem;" onclick="skipToNextPlayer()">次プレイヤー</button>
+                <button class="btn" style="background: #6c757d; color: white; padding: 6px; font-size: 0.7rem;" onclick="showDiscards()">捨て牌確認</button>
+                <button class="btn" style="background: #6c757d; color: white; padding: 6px; font-size: 0.7rem;" onclick="clearConsole()">コンソール消去</button>
+            </div>
         </div>
     </div>
 
@@ -796,12 +809,16 @@
             // 中央の捨て牌更新（全体）
             const centralDiscardsElement = document.getElementById('centralDiscards');
             if (centralDiscardsElement && gameState.gameLog) {
+                console.log('🔍 DEBUG: gameState.gameLog:', gameState.gameLog);
+                const discardLogs = gameState.gameLog.filter(log => log.type === 'discard');
+                console.log('🔍 DEBUG: discard logs:', discardLogs);
+                
                 centralDiscardsElement.innerHTML = '';
-                gameState.gameLog
-                    .filter(log => log.type === 'discard')
+                discardLogs
                     .slice(-18) // 最新18枚
                     .forEach(log => {
                         if (log.data && log.data.tile) {
+                            console.log('🔍 DEBUG: Adding discard tile to center:', log.data.tile);
                             const tileElement = document.createElement('div');
                             tileElement.className = 'discard-tile';
                             if (log.data.tile.isRed) tileElement.classList.add('red');
@@ -982,7 +999,7 @@
             if (!gameId) return;
             
             try {
-                const response = await fetch(`/api/game/${gameId}/ai-action`, {
+                const response = await fetch(`/api/game/${gameId}/ai`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -1012,6 +1029,71 @@
         function toggleDebug() {
             debugMode = !debugMode;
             showNotification(debugMode ? 'デバッグモードON' : 'デバッグモードOFF', 'info');
+        }
+
+        // デバッグ関数群
+        function forceCPUTurn() {
+            if (!gameState) {
+                showNotification('ゲーム状態がありません', 'error');
+                return;
+            }
+            const currentPlayer = gameState.players[gameState.currentPlayer];
+            if (currentPlayer && currentPlayer.name.includes('CPU')) {
+                executeAI();
+                showNotification(`${currentPlayer.name}のターンを強制実行`, 'info');
+            } else {
+                showNotification('現在のプレイヤーはCPUではありません', 'warning');
+            }
+        }
+
+        function showGameLog() {
+            if (!gameState || !gameState.gameLog) {
+                console.log('📋 ゲームログ: なし');
+                showNotification('ゲームログがありません', 'warning');
+                return;
+            }
+            console.log('📋 ゲームログ:', gameState.gameLog);
+            console.log('📋 ゲームログ詳細:');
+            gameState.gameLog.forEach((log, index) => {
+                console.log(`  ${index + 1}. [${log.type}] ${log.description}`, log);
+            });
+            showNotification(`ゲームログをコンソールに表示 (${gameState.gameLog.length}件)`, 'info');
+        }
+
+        function toggleDebugMode() {
+            debugMode = !debugMode;
+            showNotification(debugMode ? '🔧 デバッグモードON' : '🔧 デバッグモードOFF', 'info');
+        }
+
+        function skipToNextPlayer() {
+            if (!gameState) {
+                showNotification('ゲーム状態がありません', 'error');
+                return;
+            }
+            const nextPlayer = (gameState.currentPlayer + 1) % 4;
+            console.log(`⏭️ 次のプレイヤーに強制移行: ${gameState.currentPlayer} → ${nextPlayer}`);
+            showNotification(`プレイヤー${nextPlayer}のターンに移行`, 'info');
+        }
+
+        function showDiscards() {
+            if (!gameState) {
+                showNotification('ゲーム状態がありません', 'error');
+                return;
+            }
+            console.log('🗂️ 捨て牌情報:');
+            gameState.players.forEach((player, index) => {
+                console.log(`  プレイヤー${index} (${player.name}): `, player.hand.discards);
+            });
+            if (gameState.gameLog) {
+                const discardLogs = gameState.gameLog.filter(log => log.type === 'discard');
+                console.log(`🗂️ ゲームログ内の捨て牌: ${discardLogs.length}件`, discardLogs);
+            }
+            showNotification('捨て牌情報をコンソールに表示', 'info');
+        }
+
+        function clearConsole() {
+            console.clear();
+            showNotification('コンソールをクリアしました', 'info');
         }
 
         // 通知表示
