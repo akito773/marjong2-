@@ -22,7 +22,7 @@ export class GameSessionManager {
     
     // デフォルトプレイヤー名（マルチプレイヤー用）
     const defaultPlayerNames = playerNames || [
-      'プレイヤー1', 'CPU東', 'CPU南', 'CPU西'
+      'プレイヤー1', 'CPU南', 'CPU西', 'CPU北'
     ];
     
     const gameManager = new GameManager(finalGameId, defaultPlayerNames);
