@@ -259,6 +259,43 @@
             background: #e9ecef;
         }
 
+        /* 各プレイヤーの捨て牌エリア */
+        .player-discards {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 2px;
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            min-height: 60px;
+            max-width: 180px;
+        }
+
+        .player-discards .discard-tile {
+            font-size: 10px;
+            padding: 2px;
+            min-width: 24px;
+            height: 28px;
+            cursor: default;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .player-discards .discard-tile:hover {
+            transform: none;
+            background: #f8f9fa;
+        }
+
+        .player-discards .discard-tile.red {
+            color: #dc3545;
+            font-weight: 800;
+        }
+
         /* プレイヤー情報 */
         .player-info {
             display: flex;
@@ -472,6 +509,7 @@
                     <div class="player-wind">西</div>
                 </div>
                 <div class="hand-tiles opponent-tiles" id="hand2"></div>
+                <div class="player-discards" id="player2Discards"></div>
             </div>
 
             <!-- 右プレイヤー -->
@@ -482,6 +520,7 @@
                     <div class="player-wind">南</div>
                 </div>
                 <div class="hand-tiles opponent-tiles" id="hand1"></div>
+                <div class="player-discards" id="player1Discards"></div>
             </div>
 
             <!-- 左プレイヤー -->
@@ -492,6 +531,7 @@
                     <div class="player-wind">北</div>
                 </div>
                 <div class="hand-tiles opponent-tiles" id="hand3"></div>
+                <div class="player-discards" id="player3Discards"></div>
             </div>
 
             <!-- 中央エリア -->
@@ -506,11 +546,6 @@
                 </div>
             </div>
 
-            <!-- 捨て牌エリア -->
-            <div class="discard-area">
-                <div style="color: white; font-weight: 600; margin-bottom: 10px; text-align: center;">捨て牌</div>
-                <div class="discard-pile" id="discardPile"></div>
-            </div>
 
             <!-- プレイヤーの晒し牌エリア -->
             <div class="player-melds-area">
@@ -520,6 +555,7 @@
 
             <!-- プレイヤーの手牌エリア -->
             <div class="player-hand-area">
+                <div class="player-discards" id="player0Discards"></div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                     <div class="player-info" style="flex-direction: row; gap: 15px; margin: 0;">
                         <div class="player-name" id="playerName">あなた</div>
@@ -712,21 +748,22 @@
                 }
             });
 
-            // 捨て牌更新
-            const discardElement = document.getElementById('discardPile');
-            if (discardElement && gameState.gameLog) {
-                discardElement.innerHTML = '';
-                gameState.gameLog
-                    .filter(log => log.type === 'discard')
-                    .forEach(log => {
-                        if (log.data && log.data.tile) {
+            // 各プレイヤーの捨て牌更新
+            if (gameState.players) {
+                gameState.players.forEach((player, playerIndex) => {
+                    const discardElement = document.getElementById(`player${playerIndex}Discards`);
+                    if (discardElement && player.hand && player.hand.discards) {
+                        discardElement.innerHTML = '';
+                        player.hand.discards.forEach((tile, index) => {
                             const tileElement = document.createElement('div');
-                            tileElement.className = 'tile';
-                            if (log.data.tile.isRed) tileElement.classList.add('red');
-                            tileElement.textContent = log.data.tile.displayName || log.data.tile.unicode;
+                            tileElement.className = 'tile discard-tile';
+                            if (tile.isRed) tileElement.classList.add('red');
+                            tileElement.textContent = tile.displayName || tile.unicode;
+                            tileElement.style.order = index; // 順序保持
                             discardElement.appendChild(tileElement);
-                        }
-                    });
+                        });
+                    }
+                });
             }
 
             // ゲームステータス更新
