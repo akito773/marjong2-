@@ -208,7 +208,7 @@ export class WaitAnalyzer {
   private static isWinningHand(tiles: Tile[], melds: Meld[] = []): boolean {
     // HandAnalyzerを使用
     try {
-      const HandAnalyzer = require('./HandAnalyzer').HandAnalyzer;
+      const { HandAnalyzer } = require('./HandAnalyzer');
       return HandAnalyzer.isWinningHand(tiles, melds);
     } catch {
       // フォールバック：簡易判定

@@ -610,11 +610,11 @@
             if (!gameId) return;
             
             try {
-                const response = await fetch(`/api/game/${gameId}/state`);
+                const response = await fetch(`/api/game/${gameId}`);
                 const result = await response.json();
                 
                 if (result.status === 'OK') {
-                    gameState = result.data;
+                    gameState = result.data.gameState;
                     updateGameDisplay();
                     showNotification('状態を更新しました', 'success');
                 }
@@ -632,10 +632,10 @@
             document.getElementById('currentPlayer').textContent = 
                 gameState.players[gameState.currentPlayer]?.name || '-';
             document.getElementById('remainingTiles').textContent = gameState.remainingTiles;
-            document.getElementById('round').textContent = `${gameState.round}局`;
-            document.getElementById('honba').textContent = `${gameState.honba}本場`;
-            document.getElementById('roundInfo').textContent = `${gameState.round}局 ${gameState.honba}本場`;
-            document.getElementById('doraIndicator').textContent = gameState.doraIndicator || '🀫';
+            document.getElementById('round').textContent = `${gameState.round.roundNumber}局`;
+            document.getElementById('honba').textContent = `${gameState.round.honbaCount}本場`;
+            document.getElementById('roundInfo').textContent = `${gameState.round.roundNumber}局 ${gameState.round.honbaCount}本場`;
+            document.getElementById('doraIndicator').textContent = gameState.doraIndicators?.[0]?.unicode || '🀫';
 
             // プレイヤー情報更新
             gameState.players.forEach((player, index) => {
@@ -660,13 +660,13 @@
 
                 // 手牌更新
                 const handElement = document.getElementById(`hand${index}`);
-                if (handElement) {
+                if (handElement && player.hand.tiles) {
                     handElement.innerHTML = '';
-                    player.hand.forEach((tile, tileIndex) => {
+                    player.hand.tiles.forEach((tile, tileIndex) => {
                         const tileElement = document.createElement('div');
                         tileElement.className = 'tile';
                         if (tile.isRed) tileElement.classList.add('red');
-                        tileElement.textContent = tile.display || tile.unicode;
+                        tileElement.textContent = tile.displayName || tile.unicode;
                         tileElement.onclick = () => selectTile(index, tileIndex, tile);
                         handElement.appendChild(tileElement);
                     });
@@ -681,7 +681,7 @@
                     const tileElement = document.createElement('div');
                     tileElement.className = 'tile';
                     if (tile.isRed) tileElement.classList.add('red');
-                    tileElement.textContent = tile.display || tile.unicode;
+                    tileElement.textContent = tile.displayName || tile.unicode;
                     discardElement.appendChild(tileElement);
                 });
             }

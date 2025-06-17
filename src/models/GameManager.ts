@@ -158,6 +158,7 @@ export class GameManager {
     console.log(`🎯 ${this.players[this.gameState.currentPlayer].name}のターン`);
   }
 
+
   // プレイヤーアクション処理
   processAction(action: PlayerAction): GameAction[] {
     console.log(`🎲 アクション: ${action.type} by ${this.players[parseInt(action.playerId.split('_')[1])].name}`);
@@ -325,16 +326,25 @@ export class GameManager {
     }
 
     // 役判定
-    const yaku = HandAnalyzer.getYaku(
+    const yaku = HandAnalyzer.analyzeYaku(
       [...player.hand.tiles], 
-      [...player.hand.melds], 
-      player.status === 'riichi',
-      true // ツモ
+      [...player.hand.melds],
+      {
+        isRiichi: player.status === 'riichi',
+        isTsumo: true,
+        isDealer: this.gameState.currentPlayer === 0,
+        seatWind: this.getSeatWind(this.gameState.currentPlayer),
+        roundWind: this.getRoundWind(),
+        doraCount: this.countDora([...player.hand.tiles, ...player.hand.melds.flatMap(m => m.tiles)])
+      }
     );
 
     if (yaku.length === 0) {
       throw new Error(`${player.name}の手牌に役がありません`);
     }
+
+    // 点数計算
+    const scoreResult = HandAnalyzer.calculateScore(yaku, 30, this.gameState.currentPlayer === 0);
 
     player.setStatus('finished');
     (this.gameState as any).phase = 'finished';
@@ -343,8 +353,8 @@ export class GameManager {
       id: `tsumo_${Date.now()}`,
       type: 'win',
       playerId: player.id,
-      data: { yaku: yaku },
-      description: `${player.name}がツモ和了: ${yaku.join('・')}`,
+      data: { yaku: yaku, score: scoreResult },
+      description: `${player.name}がツモ和了: ${yaku.map(y => y.name).join('・')} (${scoreResult.scoreName})`,
       timestamp: Date.now(),
     }];
   }
@@ -364,12 +374,25 @@ export class GameManager {
     }
 
     // 役判定
-    const yaku = HandAnalyzer.getYaku(
+    const yaku = HandAnalyzer.analyzeYaku(
       tempTiles, 
-      [...player.hand.melds], 
-      player.status === 'riichi',
-      false // ロン
+      [...player.hand.melds],
+      {
+        isRiichi: player.status === 'riichi',
+        isTsumo: false,
+        isDealer: this.gameState.currentPlayer === 0,
+        seatWind: this.getSeatWind(this.getPlayerIndex(action.playerId)),
+        roundWind: this.getRoundWind(),
+        doraCount: this.countDora([...tempTiles, ...player.hand.melds.flatMap(m => m.tiles)])
+      }
     );
+
+    if (yaku.length === 0) {
+      throw new Error(`${player.name}の手牌に役がありません`);
+    }
+
+    // 点数計算
+    const scoreResult = HandAnalyzer.calculateScore(yaku, 30, this.gameState.currentPlayer === 0);
 
     if (yaku.length === 0) {
       throw new Error(`${player.name}の手牌に役がありません`);
@@ -382,8 +405,8 @@ export class GameManager {
       id: `ron_${Date.now()}`,
       type: 'win',
       playerId: player.id,
-      data: { yaku: yaku, ronTile: action.tile },
-      description: `${player.name}がロン和了: ${yaku.join('・')}`,
+      data: { yaku: yaku, score: scoreResult, ronTile: action.tile },
+      description: `${player.name}がロン和了: ${yaku.map(y => y.name).join('・')} (${scoreResult.scoreName})`,
       timestamp: Date.now(),
     }];
   }
@@ -751,5 +774,62 @@ export class GameManager {
     }
 
     console.log(`🀄 東${this.gameState.round.roundNumber}局開始`);
+  }
+
+  // プレイヤーIDからインデックスを取得
+  private getPlayerIndex(playerId: string): number {
+    return this.players.findIndex(p => p.id === playerId);
+  }
+
+  // 自風を取得
+  private getSeatWind(playerIndex: number): string {
+    const windOrder = ['east', 'south', 'west', 'north'];
+    const relativePosition = (playerIndex - this.gameState.round.dealerPosition + 4) % 4;
+    return windOrder[relativePosition];
+  }
+
+  // 場風を取得
+  private getRoundWind(): string {
+    // 簡易版：東風戦として東のみ
+    return 'east';
+  }
+
+  // ドラ数をカウント
+  private countDora(tiles: Tile[]): number {
+    // ドラ表示牌を取得
+    const doraIndicators = this.tileManager.getDoraIndicators();
+    let doraCount = 0;
+    
+    for (const tile of tiles) {
+      for (const indicator of doraIndicators) {
+        if (this.isDoraMatch(tile, indicator)) {
+          doraCount++;
+        }
+      }
+      
+      // 赤ドラ
+      if (tile.isRed) {
+        doraCount++;
+      }
+    }
+    
+    return doraCount;
+  }
+
+  // ドラ判定
+  private isDoraMatch(tile: Tile, indicator: Tile): boolean {
+    if (tile.honor && indicator.honor) {
+      // 字牌のドラ順序
+      const honorOrder = ['east', 'south', 'west', 'north', 'white', 'green', 'red'];
+      const indicatorIndex = honorOrder.indexOf(indicator.honor);
+      const nextIndex = (indicatorIndex + 1) % honorOrder.length;
+      return tile.honor === honorOrder[nextIndex];
+    } else if (!tile.honor && !indicator.honor && tile.suit === indicator.suit) {
+      // 数牌のドラ順序
+      const nextRank = indicator.rank === 9 ? 1 : indicator.rank! + 1;
+      return tile.rank === nextRank;
+    }
+    
+    return false;
   }
 }

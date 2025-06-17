@@ -228,6 +228,11 @@ export class TileManager {
     return 0;
   };
 
+  // ドラ表示牌を取得
+  getDoraIndicators(): Tile[] {
+    return [...this.doraIndicators];
+  }
+
   // デバッグ用: 現在の状態を取得
   getDebugInfo(): {
     totalTiles: number;
