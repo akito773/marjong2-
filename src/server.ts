@@ -479,8 +479,9 @@ io.on('connection', socket => {
     try {
       const { playerId, playerName, settings } = data;
       
-      // 新しいゲームを作成
-      const game = gameSessionManager.createGame();
+      // 新しいゲームを作成（マルチプレイヤー用にプレイヤー名配列を渡す）
+      const playerNames = [playerName, 'CPU東', 'CPU南', 'CPU西'];
+      const game = gameSessionManager.createGame(playerNames);
       const gameId = game.gameId;
       
       // ソケットをルームに参加させる

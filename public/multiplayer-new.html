@@ -793,6 +793,16 @@
         <div class="spinner"></div>
     </div>
 
+    <!-- 音効制御パネル -->
+    <div class="sound-controls" style="position: fixed; top: 10px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 8px; color: white;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <button onclick="toggleSound()" id="soundToggle" class="btn btn-sm" style="background: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 4px;">🔊</button>
+            <input type="range" id="volumeSlider" min="0" max="100" value="70" onchange="setVolume(this.value)" style="width: 80px;">
+            <button onclick="testSound()" class="btn btn-sm" style="background: #17a2b8; color: white; border: none; padding: 5px 8px; border-radius: 4px;">♪</button>
+        </div>
+    </div>
+
+    <script src="/js/SoundManager.js"></script>
     <script src="/socket.io/socket.io.js"></script>
     <script>
         let socket = null;
@@ -801,9 +811,65 @@
         let selectedTile = null;
         let gameState = null;
 
+        // 音効制御関数
+        function toggleSound() {
+            const isMuted = soundManager.toggleMute();
+            const button = document.getElementById('soundToggle');
+            button.textContent = isMuted ? '🔇' : '🔊';
+            button.style.background = isMuted ? '#dc3545' : '#28a745';
+            showNotification(isMuted ? '音効をミュートしました' : '音効を有効にしました', 'info');
+        }
+
+        function setVolume(value) {
+            soundManager.setVolume(value / 100);
+            showNotification(`音量: ${value}%`, 'info');
+        }
+
+        function testSound() {
+            soundManager.testSound();
+        }
+
+        // アクション音効再生
+        function playActionSound(actionType, success) {
+            if (!success) {
+                soundManager.playSound('error');
+                return;
+            }
+
+            switch (actionType) {
+                case 'draw':
+                    soundManager.playSound('tilePlace');
+                    break;
+                case 'discard':
+                    soundManager.playSound('tilePlace');
+                    break;
+                case 'chi':
+                    soundManager.playSound('chi');
+                    break;
+                case 'pon':
+                    soundManager.playSound('pon');
+                    break;
+                case 'kan':
+                    soundManager.playSound('kan');
+                    break;
+                case 'riichi':
+                    soundManager.playRiichi();
+                    break;
+                case 'tsumo':
+                    soundManager.playTsumo();
+                    break;
+                case 'ron':
+                    soundManager.playRon();
+                    break;
+                default:
+                    soundManager.playSound('notification');
+            }
+        }
+
         // 初期化
         document.addEventListener('DOMContentLoaded', function() {
             connectSocket();
+            soundManager.playGameStart();
         });
 
         // Socket.IO接続
@@ -827,6 +893,7 @@
                 currentRoomId = data.roomId;
                 gameState = data.gameState;
                 showNotification(`ルームを作成しました: ${currentRoomId}`, 'success');
+                soundManager.playSound('success');
                 showGameArea();
                 updateGameDisplay();
             });
@@ -835,12 +902,14 @@
                 currentRoomId = data.roomId;
                 gameState = data.gameState;
                 showNotification(`ルームに参加しました: ${currentRoomId}`, 'success');
+                soundManager.playSound('success');
                 showGameArea();
                 updateGameDisplay();
             });
 
             socket.on('roomError', (error) => {
                 showNotification(`ルームエラー: ${error.message}`, 'error');
+                soundManager.playSound('error');
             });
 
             socket.on('playerJoined', (data) => {
@@ -860,13 +929,16 @@
 
             socket.on('gameAction', (action) => {
                 addMessage(`プレイヤー${action.playerId} が ${action.type} を実行`, 'action');
+                playActionSound(action.type, true);
             });
 
             socket.on('actionResult', (result) => {
                 if (result.success) {
                     showNotification(`アクション成功: ${result.message}`, 'success');
+                    soundManager.playSound('success');
                 } else {
                     showNotification(`アクション失敗: ${result.message}`, 'error');
+                    soundManager.playSound('error');
                 }
             });
 
@@ -974,10 +1046,10 @@
             document.getElementById('currentPlayer').textContent = 
                 gameState.players[gameState.currentPlayer]?.name || '-';
             document.getElementById('remainingTiles').textContent = gameState.remainingTiles;
-            document.getElementById('round').textContent = `${gameState.round}局`;
-            document.getElementById('honba').textContent = `${gameState.honba}本場`;
-            document.getElementById('roundInfo').textContent = `${gameState.round}局 ${gameState.honba}本場`;
-            document.getElementById('doraIndicator').textContent = gameState.doraIndicator || '🀫';
+            document.getElementById('round').textContent = `${gameState.round.roundNumber}局`;
+            document.getElementById('honba').textContent = `${gameState.round.honbaCount}本場`;
+            document.getElementById('roundInfo').textContent = `${gameState.round.roundNumber}局 ${gameState.round.honbaCount}本場`;
+            document.getElementById('doraIndicator').textContent = gameState.doraIndicators?.[0]?.unicode || '🀫';
 
             // プレイヤー情報更新
             gameState.players.forEach((player, index) => {
@@ -1002,13 +1074,13 @@
 
                 // 手牌更新
                 const handElement = document.getElementById(`hand${index}`);
-                if (handElement) {
+                if (handElement && player.hand.tiles) {
                     handElement.innerHTML = '';
-                    player.hand.forEach((tile, tileIndex) => {
+                    player.hand.tiles.forEach((tile, tileIndex) => {
                         const tileElement = document.createElement('div');
                         tileElement.className = 'tile';
                         if (tile.isRed) tileElement.classList.add('red');
-                        tileElement.textContent = tile.display || tile.unicode;
+                        tileElement.textContent = tile.displayName || tile.unicode;
                         tileElement.onclick = () => selectTile(index, tileIndex, tile);
                         handElement.appendChild(tileElement);
                     });
@@ -1023,7 +1095,7 @@
                     const tileElement = document.createElement('div');
                     tileElement.className = 'tile';
                     if (tile.isRed) tileElement.classList.add('red');
-                    tileElement.textContent = tile.display || tile.unicode;
+                    tileElement.textContent = tile.displayName || tile.unicode;
                     discardElement.appendChild(tileElement);
                 });
             }

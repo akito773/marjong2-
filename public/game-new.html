@@ -566,15 +566,81 @@
     <!-- 通知 -->
     <div class="notification" id="notification"></div>
 
+    <!-- 音効制御パネル -->
+    <div class="sound-controls" style="position: fixed; top: 10px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 8px; color: white;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <button onclick="toggleSound()" id="soundToggle" class="btn btn-sm" style="background: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 4px;">🔊</button>
+            <input type="range" id="volumeSlider" min="0" max="100" value="70" onchange="setVolume(this.value)" style="width: 80px;">
+            <button onclick="testSound()" class="btn btn-sm" style="background: #17a2b8; color: white; border: none; padding: 5px 8px; border-radius: 4px;">♪</button>
+        </div>
+    </div>
+
+    <script src="/js/SoundManager.js"></script>
     <script>
         let gameId = null;
         let selectedTile = null;
         let gameState = null;
         let debugMode = false;
 
+        // 音効制御関数
+        function toggleSound() {
+            const isMuted = soundManager.toggleMute();
+            const button = document.getElementById('soundToggle');
+            button.textContent = isMuted ? '🔇' : '🔊';
+            button.style.background = isMuted ? '#dc3545' : '#28a745';
+            showNotification(isMuted ? '音効をミュートしました' : '音効を有効にしました', 'info');
+        }
+
+        function setVolume(value) {
+            soundManager.setVolume(value / 100);
+            showNotification(`音量: ${value}%`, 'info');
+        }
+
+        function testSound() {
+            soundManager.testSound();
+        }
+
+        // アクション音効再生
+        function playActionSound(actionType, success) {
+            if (!success) {
+                soundManager.playSound('error');
+                return;
+            }
+
+            switch (actionType) {
+                case 'draw':
+                    soundManager.playSound('tilePlace');
+                    break;
+                case 'discard':
+                    soundManager.playSound('tilePlace');
+                    break;
+                case 'chi':
+                    soundManager.playSound('chi');
+                    break;
+                case 'pon':
+                    soundManager.playSound('pon');
+                    break;
+                case 'kan':
+                    soundManager.playSound('kan');
+                    break;
+                case 'riichi':
+                    soundManager.playRiichi();
+                    break;
+                case 'tsumo':
+                    soundManager.playTsumo();
+                    break;
+                case 'ron':
+                    soundManager.playRon();
+                    break;
+                default:
+                    soundManager.playSound('notification');
+            }
+        }
+
         // 初期化
         document.addEventListener('DOMContentLoaded', function() {
             newGame();
+            soundManager.playGameStart();
         });
 
         // 新しいゲーム開始
@@ -710,7 +776,10 @@
             event.target.classList.add('selected');
             selectedTile = { playerIndex, tileIndex, tile };
             
-            showNotification(`${tile.display || tile.unicode}を選択しました`, 'info');
+            // 牌選択音効
+            soundManager.playSound('tileSelect');
+            
+            showNotification(`${tile.displayName || tile.unicode}を選択しました`, 'info');
         }
 
         // プレイヤーアクション
@@ -739,8 +808,12 @@
                     gameState = result.data.gameState;
                     updateGameDisplay();
                     showNotification(result.message, 'success');
+                    
+                    // アクションに応じた音効再生
+                    playActionSound(actionType, true);
                 } else {
                     showNotification(result.message || 'アクション失敗', 'error');
+                    playActionSound(actionType, false);
                 }
             } catch (error) {
                 console.error('Action error:', error);
