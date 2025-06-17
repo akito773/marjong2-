@@ -335,6 +335,53 @@
             background: #e9ecef;
         }
 
+        /* 各プレイヤーの個別捨牌エリア */
+        .player-discard-area {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 2px;
+            margin-top: 8px;
+            padding: 6px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            min-height: 50px;
+            max-width: 150px;
+        }
+
+        .player-top .player-discard-area {
+            margin-top: 8px;
+        }
+
+        .player-left .player-discard-area,
+        .player-right .player-discard-area {
+            margin-top: 8px;
+            max-width: 120px;
+        }
+
+        .player-discard-area .discard-tile {
+            font-size: 9px;
+            padding: 1px;
+            min-width: 20px;
+            height: 24px;
+            cursor: default;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .player-discard-area .discard-tile:hover {
+            transform: none;
+            background: #f8f9fa;
+        }
+
+        .player-discard-area .discard-tile.red {
+            color: #dc3545;
+            font-weight: 800;
+        }
+
         /* アクションボタン */
         .action-panel {
             position: fixed;
@@ -505,6 +552,7 @@
                     <div class="player-wind">西</div>
                 </div>
                 <div class="opponent-tiles" id="hand2"></div>
+                <div class="player-discard-area" id="player2Discards"></div>
             </div>
 
             <!-- 右側プレイヤー -->
@@ -514,6 +562,7 @@
                     <div class="player-wind">北</div>
                 </div>
                 <div class="opponent-tiles" id="hand3"></div>
+                <div class="player-discard-area" id="player3Discards"></div>
             </div>
 
             <!-- 左側プレイヤー -->
@@ -523,6 +572,7 @@
                     <div class="player-wind">南</div>
                 </div>
                 <div class="opponent-tiles" id="hand1"></div>
+                <div class="player-discard-area" id="player1Discards"></div>
             </div>
 
             <!-- 中央の捨て牌エリア -->
@@ -556,7 +606,7 @@
             
             <div class="player-discards">
                 <div class="player-discards-title">あなたの捨て牌</div>
-                <div class="player-discard-tiles" id="playerDiscards"></div>
+                <div class="player-discard-tiles" id="player0Discards"></div>
             </div>
         </div>
 
@@ -806,43 +856,39 @@
                 console.error('🔍 DEBUG: Error updating player info:', error);
             }
 
-            // 中央の捨て牌更新（全体）
-            const centralDiscardsElement = document.getElementById('centralDiscards');
-            if (centralDiscardsElement && gameState.gameLog) {
-                console.log('🔍 DEBUG: gameState.gameLog:', gameState.gameLog);
-                const discardLogs = gameState.gameLog.filter(log => log.type === 'discard');
-                console.log('🔍 DEBUG: discard logs:', discardLogs);
-                
-                centralDiscardsElement.innerHTML = '';
-                discardLogs
-                    .slice(-18) // 最新18枚
-                    .forEach(log => {
-                        if (log.data && log.data.tile) {
-                            console.log('🔍 DEBUG: Adding discard tile to center:', log.data.tile);
+            // 各プレイヤーの捨て牌更新
+            if (gameState.players) {
+                gameState.players.forEach((player, playerIndex) => {
+                    const discardElement = document.getElementById(`player${playerIndex}Discards`);
+                    if (discardElement && player.hand && player.hand.discards) {
+                        discardElement.innerHTML = '';
+                        player.hand.discards.forEach((tile, index) => {
                             const tileElement = document.createElement('div');
-                            tileElement.className = 'discard-tile';
-                            if (log.data.tile.isRed) tileElement.classList.add('red');
-                            tileElement.textContent = log.data.tile.displayName || log.data.tile.unicode;
-                            centralDiscardsElement.appendChild(tileElement);
-                        }
-                    });
+                            tileElement.className = 'tile discard-tile';
+                            if (tile.isRed) tileElement.classList.add('red');
+                            tileElement.textContent = tile.displayName || tile.unicode;
+                            tileElement.style.order = index; // 順序保持
+                            discardElement.appendChild(tileElement);
+                        });
+                    }
+                });
             }
 
-            // プレイヤーの捨て牌更新
-            const playerDiscardsElement = document.getElementById('playerDiscards');
-            if (playerDiscardsElement && gameState.gameLog) {
-                playerDiscardsElement.innerHTML = '';
-                gameState.gameLog
-                    .filter(log => log.type === 'discard' && log.playerId === 'player_0')
-                    .forEach(log => {
-                        if (log.data && log.data.tile) {
-                            const tileElement = document.createElement('div');
-                            tileElement.className = 'tile';
-                            if (log.data.tile.isRed) tileElement.classList.add('red');
-                            tileElement.textContent = log.data.tile.displayName || log.data.tile.unicode;
-                            playerDiscardsElement.appendChild(tileElement);
-                        }
-                    });
+            // 中央の捨て牌エリアは維持（ドラ表示用）
+            const centralDiscardsElement = document.getElementById('centralDiscards');
+            if (centralDiscardsElement) {
+                // 中央エリアは最新の捨牌情報のみ表示
+                centralDiscardsElement.innerHTML = '<div style="color: #ffc107; font-weight: bold;">最新の捨牌</div>';
+                if (gameState.gameLog) {
+                    const lastDiscard = gameState.gameLog.filter(log => log.type === 'discard').pop();
+                    if (lastDiscard && lastDiscard.data && lastDiscard.data.tile) {
+                        const tileElement = document.createElement('div');
+                        tileElement.className = 'discard-tile';
+                        if (lastDiscard.data.tile.isRed) tileElement.classList.add('red');
+                        tileElement.textContent = lastDiscard.data.tile.displayName || lastDiscard.data.tile.unicode;
+                        centralDiscardsElement.appendChild(tileElement);
+                    }
+                }
             }
 
             // ゲームステータス更新
