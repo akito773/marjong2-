@@ -134,7 +134,7 @@ export class Player implements IPlayer {
   }
 
   // リーチ宣言
-  declareRiichi(tile: Tile): void {
+  declareRiichi(tile: Tile, isDoubleRiichi: boolean = false): void {
     if (this._hand.riichi) {
       throw new Error(`Player ${this.name} is already in riichi`);
     }
@@ -148,6 +148,7 @@ export class Player implements IPlayer {
       ...this._hand,
       riichi: true,
       riichiTile: tile,
+      doubleRiichi: isDoubleRiichi,
     };
     this._status = 'riichi';
     this._score -= 1000; // リーチ棒
@@ -160,50 +161,47 @@ export class Player implements IPlayer {
       !this._hand.riichi &&
       this._hand.melds.length === 0 && // 鳴いていない
       this._score >= 1000 && // リーチ棒を払える
-      this.isTenpai()
+      this.isTenpai() &&
+      !this.isFuriten() // フリテンでない
     );
   }
 
   // 聴牌判定（簡易版）
   isTenpai(): boolean {
-    const { HandAnalyzer } = require('../analyzer/HandAnalyzer');
+    const { HandAnalyzer } = require('../utils/HandAnalyzer');
     
     // 13枚の場合、1枚足して和了形になるかチェック
     if (this._hand.tiles.length !== 13) return false;
     
-    // 1-9の萬子、筒子、索子、字牌で和了可能かチェック
-    const testTiles = [
-      // 萬子
-      { suit: 'man', rank: 1 }, { suit: 'man', rank: 2 }, { suit: 'man', rank: 3 },
-      { suit: 'man', rank: 4 }, { suit: 'man', rank: 5 }, { suit: 'man', rank: 6 },
-      { suit: 'man', rank: 7 }, { suit: 'man', rank: 8 }, { suit: 'man', rank: 9 },
-      // 筒子
-      { suit: 'pin', rank: 1 }, { suit: 'pin', rank: 2 }, { suit: 'pin', rank: 3 },
-      { suit: 'pin', rank: 4 }, { suit: 'pin', rank: 5 }, { suit: 'pin', rank: 6 },
-      { suit: 'pin', rank: 7 }, { suit: 'pin', rank: 8 }, { suit: 'pin', rank: 9 },
-      // 索子
-      { suit: 'sou', rank: 1 }, { suit: 'sou', rank: 2 }, { suit: 'sou', rank: 3 },
-      { suit: 'sou', rank: 4 }, { suit: 'sou', rank: 5 }, { suit: 'sou', rank: 6 },
-      { suit: 'sou', rank: 7 }, { suit: 'sou', rank: 8 }, { suit: 'sou', rank: 9 },
-      // 字牌
-      { suit: 'ji', honor: 'east' }, { suit: 'ji', honor: 'south' },
-      { suit: 'ji', honor: 'west' }, { suit: 'ji', honor: 'north' },
-      { suit: 'ji', honor: 'white' }, { suit: 'ji', honor: 'green' }, { suit: 'ji', honor: 'red' }
-    ];
+    // 手牌から待ち牌を特定（既存のHandAnalyzerを利用）
+    const waitingTiles: Tile[] = [];
     
-    for (const testTile of testTiles) {
-      const testHand = [...this._hand.tiles, testTile];
+    // 手牌にある牌から推測
+    for (const existingTile of this._hand.tiles) {
+      const testHand = [...this._hand.tiles, existingTile];
       if (HandAnalyzer.isWinningHand(testHand, this._hand.melds)) {
-        return true;
+        // 役があるかチェック
+        const yaku = HandAnalyzer.analyzeYaku(testHand, this._hand.melds, {
+          isRiichi: this._hand.riichi,
+          isTsumo: false,
+          isDealer: this._isDealer,
+          seatWind: this._wind,
+          roundWind: 'east',
+          doraCount: 0
+        });
+        
+        if (yaku.length > 0 && !waitingTiles.some(t => this.tilesEqual(t, existingTile))) {
+          waitingTiles.push(existingTile);
+        }
       }
     }
     
-    return false;
+    return waitingTiles.length > 0;
   }
 
   // 和了可能判定
   canWin(tile?: Tile): boolean {
-    const { HandAnalyzer } = require('../analyzer/HandAnalyzer');
+    const { HandAnalyzer } = require('../utils/HandAnalyzer');
     
     let handToCheck = [...this._hand.tiles];
     if (tile) {
@@ -229,6 +227,37 @@ export class Player implements IPlayer {
     });
     
     return yaku.length > 0;
+  }
+
+  // フリテン判定
+  isFuriten(): boolean {
+    const { HandAnalyzer } = require('../utils/HandAnalyzer');
+    
+    if (this._hand.tiles.length !== 13) return false;
+    
+    // 簡易フリテン判定：手牌にある牌で捨牌をチェック
+    for (const handTile of this._hand.tiles) {
+      for (const discardedTile of this._hand.discards) {
+        if (this.tilesEqual(handTile, discardedTile)) {
+          // 同じ牌を持っていて捨てている場合はフリテンの可能性
+          const testHand = [...this._hand.tiles, discardedTile];
+          if (HandAnalyzer.isWinningHand(testHand, this._hand.melds)) {
+            return true; // フリテン
+          }
+        }
+      }
+    }
+    
+    return false;
+  }
+
+  // 牌の比較
+  private tilesEqual(tile1: Tile, tile2: Tile): boolean {
+    if (tile1.suit !== tile2.suit) return false;
+    if (tile1.suit === 'ji') {
+      return tile1.honor === tile2.honor;
+    }
+    return tile1.rank === tile2.rank;
   }
 
   // 鳴き可能判定

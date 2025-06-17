@@ -346,17 +346,120 @@ export class GameManager {
       throw new Error(`${player.name} cannot declare riichi`);
     }
 
-    player.declareRiichi(action.tile);
+    // ダブルリーチ判定（配牌から1巡目）
+    const isDoubleRiichi = this.isFirstTurn(player);
+    
+    player.declareRiichi(action.tile, isDoubleRiichi);
     (this.gameState.round as any).riichiSticks++;
+
+    // 一発フラグ設定
+    this.setIppatsuFlag(player, true);
 
     return [{
       id: `riichi_${Date.now()}`,
       type: 'riichi',
       playerId: player.id,
-      data: { tile: action.tile },
-      description: `${player.name}がリーチ宣言`,
+      data: { 
+        tile: action.tile,
+        isDoubleRiichi: isDoubleRiichi
+      },
+      description: `${player.name}が${isDoubleRiichi ? 'ダブル' : ''}リーチ宣言`,
       timestamp: Date.now(),
     }];
+  }
+
+  // 1巡目判定
+  private isFirstTurn(player: Player): boolean {
+    // 配牌後、誰も鳴いておらず、各プレイヤーの捨牌が1枚以下の場合
+    const allPlayersFirstTurn = this.players.every(p => p.hand.discards.length <= 1);
+    const noMelds = this.players.every(p => p.hand.melds.length === 0);
+    return allPlayersFirstTurn && noMelds;
+  }
+
+  // 一発フラグ設定
+  private setIppatsuFlag(player: Player, value: boolean): void {
+    (player as any).ippatsuFlag = value;
+  }
+
+  // 一発フラグクリア（他プレイヤーの鳴きで）
+  private clearIppatsuFlags(): void {
+    this.players.forEach(player => {
+      (player as any).ippatsuFlag = false;
+    });
+  }
+
+  // 一発フラグリセット（和了時）
+  private resetIppatsuFlags(): void {
+    this.players.forEach(player => {
+      (player as any).ippatsuFlag = false;
+    });
+  }
+
+  // リーチ棒リセット（和了時）
+  private resetRiichiSticks(): void {
+    (this.gameState.round as any).riichiSticks = 0;
+  }
+
+  // 和了時の支払い処理
+  private processWinPayment(
+    winnerIndex: number,
+    scoreResult: any,
+    isTsumo: boolean,
+    honbaBonus: number,
+    riichiStickBonus: number
+  ): any {
+    const winner = this.players[winnerIndex];
+    const isDealer = winnerIndex === this.gameState.round.dealerPosition;
+    
+    if (isTsumo) {
+      // ツモ和了の支払い
+      const baseScore = scoreResult.baseScore;
+      let dealerPay: number, childPay: number;
+      
+      if (isDealer) {
+        // 親ツモ：子は全員同額
+        dealerPay = 0;
+        childPay = Math.ceil((baseScore * 2) / 100) * 100; // 100点単位切り上げ
+      } else {
+        // 子ツモ：親は2倍、子は等分
+        dealerPay = Math.ceil((baseScore * 2) / 100) * 100;
+        childPay = Math.ceil(baseScore / 100) * 100;
+      }
+      
+      // 本場加算
+      const honbaPerPlayer = isDealer ? honbaBonus / 3 : (winnerIndex === this.gameState.round.dealerPosition ? honbaBonus * 2 / 3 : honbaBonus / 3);
+      
+      // 支払い実行
+      let totalWinnings = 0;
+      this.players.forEach((player, index) => {
+        if (index !== winnerIndex) {
+          let payment = 0;
+          if (index === this.gameState.round.dealerPosition && !isDealer) {
+            payment = dealerPay + honbaPerPlayer;
+          } else if (index !== this.gameState.round.dealerPosition) {
+            payment = childPay + honbaPerPlayer;
+          }
+          
+          player.changeScore(-payment);
+          totalWinnings += payment;
+        }
+      });
+      
+      // 和了者に支払い分と供託を追加
+      winner.changeScore(totalWinnings + riichiStickBonus);
+      
+      return {
+        type: 'tsumo',
+        dealerPay,
+        childPay,
+        honbaBonus,
+        riichiStickBonus,
+        totalWinnings: totalWinnings + riichiStickBonus
+      };
+    } else {
+      // ロン和了の支払い（実装予定）
+      return { type: 'ron' };
+    }
   }
 
   // 鳴き処理
@@ -366,6 +469,9 @@ export class GameManager {
     }
 
     player.addMeld(action.meld, action.tile);
+    
+    // 鳴きが発生したら一発フラグをクリア
+    this.clearIppatsuFlags();
     
     // カンの場合はドラ追加
     if (action.meld.type === 'kan') {
@@ -409,9 +515,40 @@ export class GameManager {
       throw new Error(`${player.name}の手牌に役がありません`);
     }
 
-    // 点数計算
-    const scoreResult = HandAnalyzer.calculateScore(yaku, 30, this.gameState.currentPlayer === 0);
+    // 一発判定
+    const hasIppatsu = (player as any).ippatsuFlag && player.hand.riichi;
+    if (hasIppatsu) {
+      yaku.push({ name: '一発', han: 1, description: 'リーチ後1巡以内の和了' });
+    }
 
+    // ダブルリーチ判定
+    const hasDoubleRiichi = player.hand.doubleRiichi;
+    if (hasDoubleRiichi) {
+      // リーチを削除してダブルリーチに置き換え
+      const riichiIndex = yaku.findIndex(y => y.name === 'リーチ');
+      if (riichiIndex !== -1) {
+        yaku[riichiIndex] = { name: 'ダブルリーチ', han: 2, description: '配牌後第1ツモでリーチ' };
+      }
+    }
+
+    // 点数計算（本場加算含む）
+    const scoreResult = HandAnalyzer.calculateScore(yaku, 30, this.gameState.currentPlayer === 0);
+    const honbaBonus = this.gameState.round.honbaCount * 300;
+    const riichiStickBonus = this.gameState.round.riichiSticks * 1000;
+    
+    // 支払い処理
+    const paymentResult = this.processWinPayment(
+      this.gameState.currentPlayer,
+      scoreResult,
+      true, // isTsumo
+      honbaBonus,
+      riichiStickBonus
+    );
+
+    // ゲーム状態更新
+    this.resetIppatsuFlags();
+    this.resetRiichiSticks();
+    
     player.setStatus('finished');
     (this.gameState as any).phase = 'finished';
 
@@ -419,7 +556,13 @@ export class GameManager {
       id: `tsumo_${Date.now()}`,
       type: 'win',
       playerId: player.id,
-      data: { yaku: yaku, score: scoreResult },
+      data: { 
+        yaku: yaku, 
+        score: scoreResult, 
+        payment: paymentResult,
+        honbaBonus,
+        riichiStickBonus
+      },
       description: `${player.name}がツモ和了: ${yaku.map(y => y.name).join('・')} (${scoreResult.scoreName})`,
       timestamp: Date.now(),
     }];

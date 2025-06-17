@@ -21,6 +21,7 @@ export interface Hand {
   readonly riichi: boolean; // リーチ状態
   readonly riichiTile?: Tile; // リーチ宣言牌
   readonly riichiTurn?: number; // リーチ宣言した巡目
+  readonly doubleRiichi?: boolean; // ダブルリーチフラグ
 }
 
 // 和了形の判定結果
