@@ -622,9 +622,10 @@ export class GameManager {
 
   // AI自動実行
   executeAIAction(): GameAction[] {
-    if (this.debugMode) {
-      return []; // デバッグモード時はAI自動実行しない
-    }
+    // デバッグモードでもCPU自動化は動作させる
+    // if (this.debugMode) {
+    //   return []; // デバッグモード時はAI自動実行しない
+    // }
 
     const currentPlayerIndex = this.gameState.currentPlayer;
     const currentPlayer = this.players[currentPlayerIndex];
