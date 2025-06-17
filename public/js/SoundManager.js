@@ -75,6 +75,11 @@ class SoundManager {
      * トーン生成
      */
     generateTone(frequency, duration, type = 'sine') {
+        if (!this.audioContext) {
+            console.warn('AudioContext not initialized');
+            return;
+        }
+        
         const oscillator = this.audioContext.createOscillator();
         const gainNode = this.audioContext.createGain();
 

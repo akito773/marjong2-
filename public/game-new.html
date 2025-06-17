@@ -632,9 +632,22 @@
         }
 
         // 初期化
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('🔍 DEBUG: DOM loaded, initializing...');
+            try {
+                await soundManager.init();
+                console.log('🔍 DEBUG: SoundManager initialized');
+            } catch (error) {
+                console.warn('🔍 DEBUG: SoundManager init failed:', error);
+            }
+            
             newGame();
-            soundManager.playGameStart();
+            
+            try {
+                soundManager.playGameStart();
+            } catch (error) {
+                console.warn('🔍 DEBUG: playGameStart failed:', error);
+            }
         });
 
         // 新しいゲーム作成
@@ -667,23 +680,57 @@
 
         // ゲーム状態更新
         function updateGameDisplay() {
-            if (!gameState) return;
+            if (!gameState) {
+                console.log('🔍 DEBUG: gameState is null or undefined');
+                return;
+            }
+
+            console.log('🔍 DEBUG: updateGameDisplay called');
+            console.log('🔍 DEBUG: gameState:', gameState);
+            console.log('🔍 DEBUG: gameState.players:', gameState.players);
+            console.log('🔍 DEBUG: gameState.currentPlayer:', gameState.currentPlayer);
 
             // 基本情報更新
-            document.getElementById('currentPlayer').textContent = gameState.currentPlayer;
-            document.getElementById('currentPlayerName').textContent = gameState.players[gameState.currentPlayer]?.name || 'Unknown';
-            document.getElementById('remainingTiles').textContent = gameState.remainingTiles;
-            document.getElementById('remainingTilesInfo').textContent = gameState.remainingTiles;
-            document.getElementById('round').textContent = gameState.round.roundNumber;
-            document.getElementById('honba').textContent = gameState.round.honbaCount;
-            document.getElementById('roundInfo').textContent = `東${gameState.round.roundNumber}局 ${gameState.round.honbaCount}本場`;
-            document.getElementById('gameInfo').textContent = `東場 ${gameState.round.roundNumber}局`;
-            document.getElementById('doraIndicator').textContent = gameState.doraIndicators?.[0]?.unicode || '🀫';
+            try {
+                document.getElementById('currentPlayer').textContent = gameState.currentPlayer || '0';
+                
+                const currentPlayerName = gameState.players && gameState.players[gameState.currentPlayer] 
+                    ? gameState.players[gameState.currentPlayer].name 
+                    : 'Unknown';
+                document.getElementById('currentPlayerName').textContent = currentPlayerName;
+                console.log('🔍 DEBUG: currentPlayerName:', currentPlayerName);
+                document.getElementById('remainingTiles').textContent = gameState.remainingTiles || '0';
+                document.getElementById('remainingTilesInfo').textContent = gameState.remainingTiles || '0';
+                
+                if (gameState.round) {
+                    document.getElementById('round').textContent = gameState.round.roundNumber || '1';
+                    document.getElementById('honba').textContent = gameState.round.honbaCount || '0';
+                    document.getElementById('roundInfo').textContent = `東${gameState.round.roundNumber || '1'}局 ${gameState.round.honbaCount || '0'}本場`;
+                    document.getElementById('gameInfo').textContent = `東場 ${gameState.round.roundNumber || '1'}局`;
+                }
+                
+                document.getElementById('doraIndicator').textContent = gameState.doraIndicators?.[0]?.unicode || '🀫';
+                
+                console.log('🔍 DEBUG: Basic info updated successfully');
+            } catch (error) {
+                console.error('🔍 DEBUG: Error updating basic info:', error);
+            }
 
             // プレイヤー情報更新
-            gameState.players.forEach((player, index) => {
-                const playerElement = document.getElementById(`player${index}`);
-                if (!playerElement) return;
+            try {
+                console.log('🔍 DEBUG: Starting player info update');
+                if (!gameState.players || !Array.isArray(gameState.players)) {
+                    console.error('🔍 DEBUG: gameState.players is not an array:', gameState.players);
+                    return;
+                }
+                
+                gameState.players.forEach((player, index) => {
+                    console.log(`🔍 DEBUG: Processing player ${index}:`, player);
+                    const playerElement = document.getElementById(`player${index}`);
+                    if (!playerElement) {
+                        console.warn(`🔍 DEBUG: Player element not found: player${index}`);
+                        return;
+                    }
 
                 // 現在のプレイヤーをハイライト
                 if (index === gameState.currentPlayer) {
@@ -699,38 +746,52 @@
                 if (nameElement) nameElement.textContent = player.name;
                 if (windElement) windElement.textContent = player.wind;
 
-                // 手牌更新
-                const handElement = document.getElementById(`hand${index}`);
-                if (handElement && player.hand.tiles) {
-                    handElement.innerHTML = '';
+                    // 手牌更新
+                    const handElement = document.getElementById(`hand${index}`);
+                    console.log(`🔍 DEBUG: handElement for player ${index}:`, handElement);
+                    console.log(`🔍 DEBUG: player.hand for player ${index}:`, player.hand);
+                    console.log(`🔍 DEBUG: player.hand.tiles for player ${index}:`, player.hand?.tiles);
                     
-                    if (index === 0) {
-                        // プレイヤーの手牌（表示）
-                        player.hand.tiles.forEach((tile, tileIndex) => {
-                            const tileElement = document.createElement('div');
-                            tileElement.className = 'tile';
-                            if (tile.isRed) tileElement.classList.add('red');
-                            tileElement.textContent = tile.displayName || tile.unicode;
-                            tileElement.onclick = () => selectTile(index, tileIndex, tile);
-                            handElement.appendChild(tileElement);
-                        });
+                    if (handElement && player.hand && player.hand.tiles) {
+                        handElement.innerHTML = '';
                         
-                        // プレイヤー詳細情報更新
-                        document.getElementById('handCount').textContent = player.hand.tiles.length;
-                        document.getElementById('playerName').textContent = player.name;
-                        document.getElementById('playerScore').textContent = player.score;
-                        document.getElementById('playerWind').textContent = player.wind;
-                    } else {
-                        // 対戦相手の手牌（裏向き）
-                        for (let i = 0; i < player.hand.tiles.length; i++) {
-                            const tileElement = document.createElement('div');
-                            tileElement.className = 'opponent-tile';
-                            tileElement.textContent = '🀫';
-                            handElement.appendChild(tileElement);
+                        if (index === 0) {
+                            // プレイヤーの手牌（表示）
+                            console.log(`🔍 DEBUG: Updating player 0 hand with ${player.hand.tiles.length} tiles`);
+                            player.hand.tiles.forEach((tile, tileIndex) => {
+                                const tileElement = document.createElement('div');
+                                tileElement.className = 'tile';
+                                if (tile.isRed) tileElement.classList.add('red');
+                                tileElement.textContent = tile.displayName || tile.unicode;
+                                tileElement.onclick = () => selectTile(index, tileIndex, tile);
+                                handElement.appendChild(tileElement);
+                            });
+                            
+                            // プレイヤー詳細情報更新
+                            document.getElementById('handCount').textContent = player.hand.tiles.length;
+                            document.getElementById('playerName').textContent = player.name;
+                            document.getElementById('playerScore').textContent = player.score;
+                            document.getElementById('playerWind').textContent = player.wind;
+                            console.log(`🔍 DEBUG: Player 0 hand updated successfully with ${player.hand.tiles.length} tiles`);
+                        } else {
+                            // 対戦相手の手牌（裏向き）
+                            console.log(`🔍 DEBUG: Updating opponent ${index} hand with ${player.hand.tiles.length} hidden tiles`);
+                            for (let i = 0; i < player.hand.tiles.length; i++) {
+                                const tileElement = document.createElement('div');
+                                tileElement.className = 'opponent-tile';
+                                tileElement.textContent = '🀫';
+                                handElement.appendChild(tileElement);
+                            }
                         }
+                    } else {
+                        console.warn(`🔍 DEBUG: Cannot update hand for player ${index} - missing handElement or tiles`);
                     }
-                }
-            });
+                });
+                
+                console.log('🔍 DEBUG: Player info update completed');
+            } catch (error) {
+                console.error('🔍 DEBUG: Error updating player info:', error);
+            }
 
             // 中央の捨て牌更新（全体）
             const centralDiscardsElement = document.getElementById('centralDiscards');
