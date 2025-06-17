@@ -667,6 +667,21 @@ export class GameManager {
       return this.processAction(action);
     } catch (error) {
       console.error(`❌ AI行動エラー (${currentPlayer.name}):`, error);
+      
+      // エラーが発生した場合、14枚なら強制的にランダム捨牌
+      if (currentPlayer.hand.tiles.length === 14) {
+        console.log(`🎲 ${currentPlayer.name} 強制ランダム捨牌実行`);
+        const randomTile = currentPlayer.hand.tiles[Math.floor(Math.random() * currentPlayer.hand.tiles.length)];
+        const discardAction: PlayerAction = {
+          type: 'discard',
+          playerId: currentPlayer.id,
+          tile: randomTile,
+          priority: 1,
+          timestamp: Date.now()
+        };
+        return this.processAction(discardAction);
+      }
+      
       return [];
     }
   }
