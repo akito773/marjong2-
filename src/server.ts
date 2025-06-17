@@ -165,7 +165,7 @@ app.get('/api/game/test', (_req, res) => {
 app.post('/api/game/create', (req, res) => {
   try {
     const { playerNames } = req.body;
-    const names = playerNames || ['プレイヤー1', 'CPU北', 'CPU西', 'CPU南'];
+    const names = playerNames || ['プレイヤー1', 'CPU南', 'CPU西', 'CPU北'];
     
     const game = gameSessionManager.createGame(names);
 
@@ -480,7 +480,7 @@ io.on('connection', socket => {
       const { playerId, playerName, settings } = data;
       
       // 新しいゲームを作成（マルチプレイヤー用にプレイヤー名配列を渡す）
-      const playerNames = [playerName, 'CPU北', 'CPU西', 'CPU南'];
+      const playerNames = [playerName, 'CPU南', 'CPU西', 'CPU北'];
       const game = gameSessionManager.createGame(playerNames);
       const gameId = game.gameId;
       

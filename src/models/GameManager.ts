@@ -50,7 +50,7 @@ export class GameManager {
     this.debugMode = false;
     console.log(`🤖 CPU自動動作モード: CPUプレイヤーが自動的にプレイします`);
     
-    if (playerNames.includes('CPU北') || playerNames.includes('CPU西') || playerNames.includes('CPU南')) {
+    if (playerNames.includes('CPU南') || playerNames.includes('CPU西') || playerNames.includes('CPU北')) {
       console.log(`🔧 CPU名検出更新: [${playerNames.join(', ')}]`);
     }
 
