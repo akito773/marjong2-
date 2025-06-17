@@ -650,15 +650,15 @@
         </div>
         
         <!-- デバッグパネル -->
-        <div class="debug-panel" style="position: fixed; bottom: 80px; right: 20px; background: rgba(0,0,0,0.9); color: white; padding: 15px; border-radius: 8px; font-size: 0.8rem; z-index: 100;">
-            <div style="font-weight: bold; margin-bottom: 10px;">🔧 デバッグ操作</div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                <button class="btn" style="background: #6c757d; color: white; padding: 6px; font-size: 0.7rem;" onclick="forceCPUTurn()">CPU強制実行</button>
-                <button class="btn" style="background: #6c757d; color: white; padding: 6px; font-size: 0.7rem;" onclick="showGameLog()">ログ表示</button>
-                <button class="btn" style="background: #6c757d; color: white; padding: 6px; font-size: 0.7rem;" onclick="toggleDebugMode()">デバッグ切替</button>
-                <button class="btn" style="background: #6c757d; color: white; padding: 6px; font-size: 0.7rem;" onclick="skipToNextPlayer()">次プレイヤー</button>
-                <button class="btn" style="background: #6c757d; color: white; padding: 6px; font-size: 0.7rem;" onclick="showDiscards()">捨て牌確認</button>
-                <button class="btn" style="background: #6c757d; color: white; padding: 6px; font-size: 0.7rem;" onclick="clearConsole()">コンソール消去</button>
+        <div class="debug-panel" style="position: fixed; top: 120px; left: 20px; background: rgba(0,0,0,0.9); color: white; padding: 12px; border-radius: 8px; font-size: 0.8rem; z-index: 100; max-width: 200px;">
+            <div style="font-weight: bold; margin-bottom: 8px;">🔧 デバッグ操作</div>
+            <div style="display: grid; grid-template-columns: 1fr; gap: 6px;">
+                <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="forceCPUTurn()">CPU強制実行</button>
+                <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="showGameLog()">ログ表示</button>
+                <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="toggleDebugMode()">デバッグ切替</button>
+                <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="skipToNextPlayer()">次プレイヤー</button>
+                <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="showDiscards()">捨て牌確認</button>
+                <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="clearConsole()">コンソール消去</button>
             </div>
         </div>
     </div>
