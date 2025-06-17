@@ -166,16 +166,69 @@ export class Player implements IPlayer {
 
   // 聴牌判定（簡易版）
   isTenpai(): boolean {
-    // TODO: 実際の聴牌判定ロジックを実装
-    // 現在は常にfalseを返す（後で実装）
+    const { HandAnalyzer } = require('../analyzer/HandAnalyzer');
+    
+    // 13枚の場合、1枚足して和了形になるかチェック
+    if (this._hand.tiles.length !== 13) return false;
+    
+    // 1-9の萬子、筒子、索子、字牌で和了可能かチェック
+    const testTiles = [
+      // 萬子
+      { suit: 'man', rank: 1 }, { suit: 'man', rank: 2 }, { suit: 'man', rank: 3 },
+      { suit: 'man', rank: 4 }, { suit: 'man', rank: 5 }, { suit: 'man', rank: 6 },
+      { suit: 'man', rank: 7 }, { suit: 'man', rank: 8 }, { suit: 'man', rank: 9 },
+      // 筒子
+      { suit: 'pin', rank: 1 }, { suit: 'pin', rank: 2 }, { suit: 'pin', rank: 3 },
+      { suit: 'pin', rank: 4 }, { suit: 'pin', rank: 5 }, { suit: 'pin', rank: 6 },
+      { suit: 'pin', rank: 7 }, { suit: 'pin', rank: 8 }, { suit: 'pin', rank: 9 },
+      // 索子
+      { suit: 'sou', rank: 1 }, { suit: 'sou', rank: 2 }, { suit: 'sou', rank: 3 },
+      { suit: 'sou', rank: 4 }, { suit: 'sou', rank: 5 }, { suit: 'sou', rank: 6 },
+      { suit: 'sou', rank: 7 }, { suit: 'sou', rank: 8 }, { suit: 'sou', rank: 9 },
+      // 字牌
+      { suit: 'ji', honor: 'east' }, { suit: 'ji', honor: 'south' },
+      { suit: 'ji', honor: 'west' }, { suit: 'ji', honor: 'north' },
+      { suit: 'ji', honor: 'white' }, { suit: 'ji', honor: 'green' }, { suit: 'ji', honor: 'red' }
+    ];
+    
+    for (const testTile of testTiles) {
+      const testHand = [...this._hand.tiles, testTile];
+      if (HandAnalyzer.isWinningHand(testHand, this._hand.melds)) {
+        return true;
+      }
+    }
+    
     return false;
   }
 
   // 和了可能判定
   canWin(tile?: Tile): boolean {
-    // TODO: 実際の和了判定ロジックを実装
-    // 現在は常にfalseを返す（後で実装）
-    return false;
+    const { HandAnalyzer } = require('../analyzer/HandAnalyzer');
+    
+    let handToCheck = [...this._hand.tiles];
+    if (tile) {
+      handToCheck.push(tile);
+    }
+    
+    // 14枚で和了形かチェック
+    if (handToCheck.length !== 14) return false;
+    
+    // 和了形判定
+    if (!HandAnalyzer.isWinningHand(handToCheck, this._hand.melds)) {
+      return false;
+    }
+    
+    // 役があるかチェック
+    const yaku = HandAnalyzer.analyzeYaku(handToCheck, this._hand.melds, {
+      isRiichi: this._hand.riichi,
+      isTsumo: !tile, // tileがない場合はツモ
+      isDealer: this._isDealer,
+      seatWind: this._wind,
+      roundWind: 'east', // 簡易実装
+      doraCount: 0 // 簡易実装
+    });
+    
+    return yaku.length > 0;
   }
 
   // 鳴き可能判定

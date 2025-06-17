@@ -640,6 +640,7 @@
         <div class="action-panel">
             <button class="btn btn-primary" onclick="drawTile()" id="drawBtn">ツモ</button>
             <button class="btn btn-danger" onclick="discardSelected()" id="discardBtn">打牌</button>
+            <button class="btn" style="background: #ff6b6b; color: white;" onclick="callRiichi()" id="riichiBtn">リーチ</button>
             <button class="btn btn-warning" onclick="callChi()" id="chiBtn">チー</button>
             <button class="btn btn-warning" onclick="callPon()" id="ponBtn">ポン</button>
             <button class="btn btn-warning" onclick="callKan()" id="kanBtn">カン</button>
@@ -1066,11 +1067,113 @@
         }
 
         // 鳴き関数
-        function callChi() { showNotification('チー機能は実装済みです', 'info'); }
-        function callPon() { showNotification('ポン機能は実装済みです', 'info'); }
-        function callKan() { showNotification('カン機能は実装済みです', 'info'); }
-        function callTsumo() { showNotification('ツモ機能は実装済みです', 'info'); }
-        function callRon() { showNotification('ロン機能は実装済みです', 'info'); }
+        // チー
+        function callChi() {
+            if (!gameState || gameState.currentPlayer === 0) {
+                showNotification('チーできません', 'error');
+                return;
+            }
+            
+            performAction('chi', {}, (result) => {
+                if (result.success) {
+                    showNotification('チーしました', 'success');
+                    requestGameState();
+                } else {
+                    showNotification(`チーできません: ${result.error}`, 'error');
+                }
+            });
+        }
+
+        // ポン
+        function callPon() {
+            if (!gameState || gameState.currentPlayer === 0) {
+                showNotification('ポンできません', 'error');
+                return;
+            }
+            
+            performAction('pon', {}, (result) => {
+                if (result.success) {
+                    showNotification('ポンしました', 'success');
+                    requestGameState();
+                } else {
+                    showNotification(`ポンできません: ${result.error}`, 'error');
+                }
+            });
+        }
+
+        // カン
+        function callKan() {
+            if (!gameState || gameState.currentPlayer === 0) {
+                showNotification('カンできません', 'error');
+                return;
+            }
+            
+            performAction('kan', {}, (result) => {
+                if (result.success) {
+                    showNotification('カンしました', 'success');
+                    requestGameState();
+                } else {
+                    showNotification(`カンできません: ${result.error}`, 'error');
+                }
+            });
+        }
+
+        // ツモ和了
+        function callTsumo() {
+            if (!gameState || gameState.currentPlayer !== 0) {
+                showNotification('ツモできません（あなたのターンではありません）', 'error');
+                return;
+            }
+            
+            performAction('tsumo', {}, (result) => {
+                if (result.success) {
+                    showNotification('ツモ和了！', 'success');
+                    if (result.data && result.data.score) {
+                        showNotification(`獲得点数: ${result.data.score.total}点`, 'info');
+                    }
+                    requestGameState();
+                } else {
+                    showNotification(`ツモできません: ${result.error}`, 'error');
+                }
+            });
+        }
+
+        // ロン和了
+        function callRon() {
+            if (!gameState || gameState.currentPlayer === 0) {
+                showNotification('ロンできません', 'error');
+                return;
+            }
+            
+            performAction('ron', {}, (result) => {
+                if (result.success) {
+                    showNotification('ロン和了！', 'success');
+                    if (result.data && result.data.score) {
+                        showNotification(`獲得点数: ${result.data.score.total}点`, 'info');
+                    }
+                    requestGameState();
+                } else {
+                    showNotification(`ロンできません: ${result.error}`, 'error');
+                }
+            });
+        }
+
+        // リーチ
+        function callRiichi() {
+            if (!gameState || gameState.currentPlayer !== 0) {
+                showNotification('リーチできません（あなたのターンではありません）', 'error');
+                return;
+            }
+            
+            performAction('riichi', {}, (result) => {
+                if (result.success) {
+                    showNotification('リーチ！', 'success');
+                    requestGameState();
+                } else {
+                    showNotification(`リーチできません: ${result.error}`, 'error');
+                }
+            });
+        }
 
         function toggleDebug() {
             debugMode = !debugMode;
