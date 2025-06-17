@@ -3,9 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🀄 本格麻雀 v1.2.0</title>
+    <title>🀄 麻雀ゲーム v1.2.0</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --primary: #0f5132;
+            --secondary: #20c997;
+            --accent: #ffc107;
+            --danger: #dc3545;
+            --success: #198754;
+            --info: #0dcaf0;
+            --dark: #212529;
+            --light: #f8f9fa;
+            --gold: #ffd700;
+            --shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            --border-radius: 12px;
+            --table-bg: linear-gradient(135deg, #2d5016 0%, #0f5132 100%);
+            --player-bg: rgba(255, 255, 255, 0.95);
+            --tile-bg: #ffffff;
+            --tile-border: #dee2e6;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -14,7 +32,7 @@
 
         body {
             font-family: 'Noto Sans JP', sans-serif;
-            background: linear-gradient(135deg, #1a5f2f 0%, #0f4021 50%, #0a2d17 100%);
+            background: linear-gradient(135deg, #1a4c2c 0%, #2d5a3d 50%, #0f3319 100%);
             color: #212529;
             height: 100vh;
             overflow: hidden;
@@ -42,44 +60,28 @@
             color: #ffc107;
         }
 
-        .game-info {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            color: white;
-            font-size: 0.9rem;
-        }
-
-        .game-controls {
-            display: flex;
-            gap: 10px;
-        }
-
-        /* メインゲームエリア */
-        .mahjong-container {
+        /* 麻雀台レイアウト */
+        .mahjong-game {
+            display: grid;
+            grid-template-areas:
+                "opponent2 opponent2 opponent2"
+                "opponent3 center opponent1"
+                "discard discard discard"
+                "player-melds player-melds player-melds"
+                "player-hand player-hand player-hand";
+            grid-template-rows: 100px 200px 150px 80px 140px;
             height: 100vh;
             padding-top: 60px;
-            display: flex;
-            flex-direction: column;
+            gap: 10px;
+            padding: 70px 20px 20px 20px;
         }
 
-        /* ゲームボード（中央エリア） */
-        .game-board {
-            flex: 1;
-            background: linear-gradient(135deg, #2d5a3d 0%, #1a4c2c 100%);
-            border-radius: 20px;
-            margin: 20px;
-            position: relative;
-            border: 8px solid #8b4513;
-            box-shadow: 0 0 0 4px #ffc107, 0 20px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        /* プレイヤー配置 */
+        /* プレイヤーエリア */
         .player-area {
-            position: absolute;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
+            background: var(--player-bg);
+            border-radius: var(--border-radius);
             padding: 10px;
+            box-shadow: var(--shadow);
             border: 2px solid transparent;
             transition: all 0.3s ease;
         }
@@ -89,195 +91,71 @@
             box-shadow: 0 0 20px rgba(255, 193, 7, 0.5);
         }
 
-        /* 上側プレイヤー（対面） */
-        .player-top {
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            text-align: center;
+        /* 対戦相手配置 */
+        .opponent2 { 
+            grid-area: opponent2; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .opponent1 { 
+            grid-area: opponent1; 
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .opponent3 { 
+            grid-area: opponent3; 
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
         }
 
-        /* 右側プレイヤー */
-        .player-right {
-            right: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            text-align: center;
+        /* プレイヤー（下部）エリア */
+        .player-hand-area {
+            grid-area: player-hand;
+            background: var(--player-bg);
+            border-radius: var(--border-radius);
+            padding: 15px;
+            border: 3px solid #ffc107;
         }
 
-        /* 左側プレイヤー */
-        .player-left {
-            left: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            text-align: center;
-        }
-
-        /* プレイヤー情報 */
-        .player-info {
-            color: white;
-            margin-bottom: 8px;
-            font-size: 0.9rem;
-        }
-
-        .player-name {
-            font-weight: 600;
-            margin-bottom: 2px;
-        }
-
-        .player-wind {
-            background: linear-gradient(135deg, #ffc107, #fd7e14);
-            color: white;
-            padding: 2px 6px;
-            border-radius: 10px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            display: inline-block;
+        .player-melds-area {
+            grid-area: player-melds;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: var(--border-radius);
+            padding: 10px;
         }
 
         /* 手牌表示 */
         .hand-tiles {
             display: flex;
-            gap: 2px;
             flex-wrap: nowrap;
-        }
-
-        /* 対戦相手の手牌（裏向き） */
-        .opponent-tiles {
-            display: flex;
-            gap: 2px;
-        }
-
-        .opponent-tile {
-            width: 20px;
-            height: 28px;
-            background: #4a5568;
-            border: 1px solid #2d3748;
-            border-radius: 3px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 10px;
-        }
-
-        /* 左右のプレイヤーは縦向き */
-        .player-left .opponent-tiles, 
-        .player-right .opponent-tiles {
-            flex-direction: column;
-        }
-
-        .player-left .opponent-tile, 
-        .player-right .opponent-tile {
-            width: 28px;
-            height: 20px;
-        }
-
-        /* 中央の捨て牌エリア */
-        .center-discard-area {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 300px;
-            height: 200px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 12px;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .center-info {
-            color: white;
-            text-align: center;
-            margin-bottom: 10px;
-        }
-
-        .round-info {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: #ffc107;
-            margin-bottom: 5px;
-        }
-
-        .dora-info {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 5px 10px;
-            border-radius: 6px;
-            font-size: 0.8rem;
-            margin-bottom: 10px;
-        }
-
-        .central-discards {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 3px;
-            max-height: 120px;
-            overflow-y: auto;
-        }
-
-        .discard-tile {
-            font-size: 16px;
-            width: 24px;
-            height: 32px;
-            background: rgba(255, 255, 255, 0.8);
-            border: 1px solid #ccc;
-            border-radius: 3px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: default;
-        }
-
-        /* プレイヤーエリア（下部） */
-        .player-bottom-area {
-            background: rgba(255, 255, 255, 0.95);
-            margin: 0 20px 20px 20px;
-            border-radius: 12px;
-            padding: 15px;
-            border: 3px solid #ffc107;
-        }
-
-        .player-hand-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        .player-details {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .hand-count {
-            font-size: 0.9rem;
-            color: #6c757d;
-        }
-
-        /* プレイヤーの手牌 */
-        .player-hand {
-            display: flex;
             gap: 4px;
+            justify-content: center;
+            overflow-x: auto;
+            padding: 5px 0;
+        }
+
+        .hand-tiles.player-hand {
             justify-content: flex-start;
-            flex-wrap: wrap;
-            margin-bottom: 15px;
+            max-width: 100%;
         }
 
         .tile {
-            background: white;
-            border: 2px solid #dee2e6;
+            background: var(--tile-bg);
+            border: 2px solid var(--tile-border);
             border-radius: 6px;
-            padding: 8px 6px;
-            font-size: 18px;
+            padding: 8px 10px;
+            font-size: 16px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s ease;
-            width: 40px;
-            height: 50px;
+            min-width: 32px;
+            height: 45px;
+            text-align: center;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -288,7 +166,7 @@
         .tile:hover {
             transform: translateY(-3px);
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            background: #f8f9fa;
+            background: #e9ecef;
         }
 
         .tile.selected {
@@ -303,39 +181,138 @@
             font-weight: 800;
         }
 
-        /* プレイヤーの捨て牌 */
-        .player-discards {
-            border-top: 1px solid #dee2e6;
-            padding-top: 10px;
+        /* 対戦相手の手牌（裏向き） */
+        .opponent-tiles .tile {
+            background: #6c757d;
+            color: white;
+            font-size: 12px;
+            min-width: 20px;
+            height: 28px;
+            cursor: default;
+            border-color: #495057;
         }
 
-        .player-discards-title {
-            font-size: 0.8rem;
-            color: #6c757d;
-            margin-bottom: 8px;
+        .opponent-tiles .tile:hover {
+            transform: none;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            background: #6c757d;
         }
 
-        .player-discard-tiles {
+        /* 中央エリア（捨て牌・情報） */
+        .center-area {
+            grid-area: center;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: var(--border-radius);
+            padding: 15px;
             display: flex;
-            gap: 3px;
-            flex-wrap: wrap;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-align: center;
         }
 
-        .player-discard-tiles .tile {
-            width: 28px;
-            height: 36px;
-            font-size: 14px;
+        .round-info {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #ffc107;
+        }
+
+        .dora-display {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+
+        /* 捨て牌エリア */
+        .discard-area {
+            grid-area: discard;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: var(--border-radius);
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .discard-pile {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+            gap: 3px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .discard-pile .tile {
+            font-size: 12px;
+            padding: 4px;
+            min-width: 26px;
+            height: 35px;
             cursor: default;
             background: #e9ecef;
             border-color: #ced4da;
         }
 
-        .player-discard-tiles .tile:hover {
+        .discard-pile .tile:hover {
             transform: none;
             background: #e9ecef;
         }
 
-        /* アクションボタン */
+        /* プレイヤー情報 */
+        .player-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .player-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 3px;
+        }
+
+        .player-score {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+
+        .player-wind {
+            background: linear-gradient(135deg, #ffc107, #fd7e14);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-top: 3px;
+        }
+
+        /* 晒し牌エリア */
+        .melds-display {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .meld-group {
+            display: flex;
+            gap: 2px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 5px;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+        }
+
+        .meld-group .tile {
+            min-width: 24px;
+            height: 32px;
+            font-size: 11px;
+            cursor: default;
+        }
+
+        /* アクションボタンエリア */
         .action-panel {
             position: fixed;
             bottom: 20px;
@@ -373,12 +350,12 @@
             position: fixed;
             top: 80px;
             right: 20px;
-            width: 250px;
+            width: 280px;
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
-            border-radius: 12px;
+            border-radius: var(--border-radius);
             padding: 15px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            box-shadow: var(--shadow);
             z-index: 50;
         }
 
@@ -410,9 +387,33 @@
         }
 
         .stat-value {
-            font-size: 0.9rem;
+            font-size: 1rem;
             font-weight: 600;
             color: #212529;
+        }
+
+        /* レスポンシブ */
+        @media (max-width: 768px) {
+            .mahjong-game {
+                padding: 70px 10px 10px 10px;
+                gap: 5px;
+            }
+            
+            .info-panel {
+                position: relative;
+                top: auto;
+                right: auto;
+                width: 100%;
+                margin: 10px;
+            }
+            
+            .action-panel {
+                position: relative;
+                bottom: auto;
+                right: auto;
+                max-width: none;
+                margin: 10px;
+            }
         }
 
         /* 通知 */
@@ -447,48 +448,13 @@
             background: #fff3cd;
             color: #856404;
         }
-
-        /* レスポンシブ */
-        @media (max-width: 768px) {
-            .game-board {
-                margin: 10px;
-            }
-            
-            .info-panel {
-                position: relative;
-                top: auto;
-                right: auto;
-                width: 100%;
-                margin: 10px;
-            }
-            
-            .action-panel {
-                position: relative;
-                bottom: auto;
-                right: auto;
-                max-width: none;
-                margin: 10px;
-                justify-content: center;
-            }
-
-            .player-bottom-area {
-                margin: 0 10px 10px 10px;
-            }
-        }
     </style>
 </head>
 <body>
-    <div class="mahjong-container">
+    <div class="game-container">
         <!-- ヘッダー -->
         <header class="game-header">
-            <a href="/title.html" class="game-title" style="text-decoration: none;">🀄 本格麻雀 v1.2.0</a>
-            
-            <div class="game-info">
-                <div id="gameInfo">東場 1局</div>
-                <div>残り牌: <span id="remainingTiles">69</span></div>
-                <div>現在: <span id="currentPlayerName">あなた</span></div>
-            </div>
-
+            <a href="/title.html" class="game-title" style="text-decoration: none;">🀄 麻雀ゲーム v1.2.0</a>
             <div class="game-controls">
                 <button class="btn btn-info" onclick="toggleDebug()">デバッグ</button>
                 <button class="btn btn-warning" onclick="newGame()">新しいゲーム</button>
@@ -496,67 +462,75 @@
             </div>
         </header>
 
-        <!-- ゲームボード -->
-        <div class="game-board">
-            <!-- 上側プレイヤー（対面） -->
-            <div class="player-area player-top" id="player2">
+        <!-- 麻雀ゲームエリア -->
+        <div class="mahjong-game">
+            <!-- 対面プレイヤー（上） -->
+            <div class="player-area opponent2" id="player2">
                 <div class="player-info">
                     <div class="player-name">CPU南</div>
+                    <div class="player-score">25000点</div>
                     <div class="player-wind">西</div>
                 </div>
-                <div class="opponent-tiles" id="hand2"></div>
+                <div class="hand-tiles opponent-tiles" id="hand2"></div>
             </div>
 
-            <!-- 右側プレイヤー -->
-            <div class="player-area player-right" id="player1">
+            <!-- 右プレイヤー -->
+            <div class="player-area opponent1" id="player1">
                 <div class="player-info">
                     <div class="player-name">CPU東</div>
+                    <div class="player-score">25000点</div>
                     <div class="player-wind">南</div>
                 </div>
-                <div class="opponent-tiles" id="hand1"></div>
+                <div class="hand-tiles opponent-tiles" id="hand1"></div>
             </div>
 
-            <!-- 左側プレイヤー -->
-            <div class="player-area player-left" id="player3">
+            <!-- 左プレイヤー -->
+            <div class="player-area opponent3" id="player3">
                 <div class="player-info">
                     <div class="player-name">CPU西</div>
+                    <div class="player-score">25000点</div>
                     <div class="player-wind">北</div>
                 </div>
-                <div class="opponent-tiles" id="hand3"></div>
+                <div class="hand-tiles opponent-tiles" id="hand3"></div>
             </div>
 
-            <!-- 中央の捨て牌エリア -->
-            <div class="center-discard-area">
-                <div class="center-info">
-                    <div class="round-info" id="roundInfo">東1局</div>
-                    <div class="dora-info">
-                        ドラ: <span id="doraIndicator">🀫</span>
-                    </div>
+            <!-- 中央エリア -->
+            <div class="center-area">
+                <div class="round-info" id="roundInfo">東1局</div>
+                <div class="dora-display">
+                    <div>ドラ表示牌</div>
+                    <div style="font-size: 1.2rem; margin-top: 5px;" id="doraIndicator">🀫</div>
                 </div>
-                <div class="central-discards" id="centralDiscards"></div>
+                <div style="font-size: 0.8rem; color: #ccc;">
+                    残り: <span id="remainingTiles">69</span>枚
+                </div>
             </div>
-        </div>
 
-        <!-- プレイヤーエリア（下部） -->
-        <div class="player-bottom-area">
-            <div class="player-hand-header">
-                <div class="player-details">
-                    <div class="player-name" id="playerName">あなた</div>
-                    <div class="player-wind" id="playerWind">東</div>
-                    <div style="color: #6c757d; font-size: 0.9rem;">
-                        <span id="playerScore">25000</span>点
+            <!-- 捨て牌エリア -->
+            <div class="discard-area">
+                <div style="color: white; font-weight: 600; margin-bottom: 10px; text-align: center;">捨て牌</div>
+                <div class="discard-pile" id="discardPile"></div>
+            </div>
+
+            <!-- プレイヤーの晒し牌エリア -->
+            <div class="player-melds-area">
+                <div style="font-weight: 600; margin-bottom: 8px; color: #495057;">鳴き牌</div>
+                <div class="melds-display" id="playerMelds"></div>
+            </div>
+
+            <!-- プレイヤーの手牌エリア -->
+            <div class="player-hand-area">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <div class="player-info" style="flex-direction: row; gap: 15px; margin: 0;">
+                        <div class="player-name" id="playerName">あなた</div>
+                        <div class="player-score" id="playerScore">25000点</div>
+                        <div class="player-wind" id="playerWind">東</div>
+                    </div>
+                    <div style="font-size: 0.9rem; color: #6c757d;">
+                        手牌: <span id="handCount">13</span>枚
                     </div>
                 </div>
-                <div class="hand-count">
-                    手牌: <span id="handCount">13</span>枚
-                </div>
-            </div>
-            
-            <div class="player-hand" id="hand0"></div>
-            
-            <div class="player-discards">
-                <div class="player-discards-title">あなたの捨て牌</div>
-                <div class="player-discard-tiles" id="playerDiscards"></div>
+                <div class="hand-tiles player-hand" id="hand0"></div>
             </div>
         </div>
 
@@ -566,11 +540,11 @@
             <div class="game-stats">
                 <div class="stat-item">
                     <div class="stat-label">現在プレイヤー</div>
-                    <div class="stat-value" id="currentPlayer">0</div>
+                    <div class="stat-value" id="currentPlayer">-</div>
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">局数</div>
-                    <div class="stat-value" id="round">1</div>
+                    <div class="stat-value" id="round">-</div>
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">本場</div>
@@ -578,7 +552,7 @@
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">残り牌</div>
-                    <div class="stat-value" id="remainingTilesInfo">69</div>
+                    <div class="stat-value" id="remainingTilesInfo">-</div>
                 </div>
             </div>
             <button class="btn btn-success" onclick="requestGameState()" style="width: 100%;">
@@ -603,10 +577,11 @@
     <div class="notification" id="notification"></div>
 
     <!-- 音効制御パネル -->
-    <div style="position: fixed; top: 10px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.8); padding: 8px; border-radius: 6px; color: white;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-            <button onclick="toggleSound()" id="soundToggle" class="btn" style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">🔊</button>
-            <input type="range" id="volumeSlider" min="0" max="100" value="70" onchange="setVolume(this.value)" style="width: 60px;">
+    <div style="position: fixed; top: 10px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.8); padding: 10px; border-radius: 8px; color: white;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <button onclick="toggleSound()" id="soundToggle" class="btn" style="background: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 4px;">🔊</button>
+            <input type="range" id="volumeSlider" min="0" max="100" value="70" onchange="setVolume(this.value)" style="width: 80px;">
+            <button onclick="testSound()" class="btn" style="background: #17a2b8; color: white; border: none; padding: 5px 8px; border-radius: 4px;">♪</button>
         </div>
     </div>
 
@@ -631,13 +606,18 @@
             showNotification(`音量: ${value}%`, 'info');
         }
 
+        function testSound() {
+            soundManager.playTilePlace();
+            showNotification('テスト音を再生', 'info');
+        }
+
         // 初期化
         document.addEventListener('DOMContentLoaded', function() {
             newGame();
             soundManager.playGameStart();
         });
 
-        // 新しいゲーム作成
+        // ゲーム関数（元のゲームロジックを再利用）
         async function newGame() {
             try {
                 showNotification('新しいゲームを作成中...', 'info');
@@ -671,13 +651,11 @@
 
             // 基本情報更新
             document.getElementById('currentPlayer').textContent = gameState.currentPlayer;
-            document.getElementById('currentPlayerName').textContent = gameState.players[gameState.currentPlayer]?.name || 'Unknown';
             document.getElementById('remainingTiles').textContent = gameState.remainingTiles;
             document.getElementById('remainingTilesInfo').textContent = gameState.remainingTiles;
-            document.getElementById('round').textContent = gameState.round.roundNumber;
-            document.getElementById('honba').textContent = gameState.round.honbaCount;
+            document.getElementById('round').textContent = `${gameState.round.roundNumber}局`;
+            document.getElementById('honba').textContent = `${gameState.round.honbaCount}本場`;
             document.getElementById('roundInfo').textContent = `東${gameState.round.roundNumber}局 ${gameState.round.honbaCount}本場`;
-            document.getElementById('gameInfo').textContent = `東場 ${gameState.round.roundNumber}局`;
             document.getElementById('doraIndicator').textContent = gameState.doraIndicators?.[0]?.unicode || '🀫';
 
             // プレイヤー情報更新
@@ -694,9 +672,11 @@
 
                 // プレイヤー情報更新
                 const nameElement = playerElement.querySelector('.player-name');
+                const scoreElement = playerElement.querySelector('.player-score');
                 const windElement = playerElement.querySelector('.player-wind');
                 
                 if (nameElement) nameElement.textContent = player.name;
+                if (scoreElement) scoreElement.textContent = `${player.score}点`;
                 if (windElement) windElement.textContent = player.wind;
 
                 // 手牌更新
@@ -715,16 +695,16 @@
                             handElement.appendChild(tileElement);
                         });
                         
-                        // プレイヤー詳細情報更新
+                        // 手牌数表示更新
                         document.getElementById('handCount').textContent = player.hand.tiles.length;
                         document.getElementById('playerName').textContent = player.name;
-                        document.getElementById('playerScore').textContent = player.score;
+                        document.getElementById('playerScore').textContent = `${player.score}点`;
                         document.getElementById('playerWind').textContent = player.wind;
                     } else {
                         // 対戦相手の手牌（裏向き）
                         for (let i = 0; i < player.hand.tiles.length; i++) {
                             const tileElement = document.createElement('div');
-                            tileElement.className = 'opponent-tile';
+                            tileElement.className = 'tile';
                             tileElement.textContent = '🀫';
                             handElement.appendChild(tileElement);
                         }
@@ -732,37 +712,19 @@
                 }
             });
 
-            // 中央の捨て牌更新（全体）
-            const centralDiscardsElement = document.getElementById('centralDiscards');
-            if (centralDiscardsElement && gameState.gameLog) {
-                centralDiscardsElement.innerHTML = '';
+            // 捨て牌更新
+            const discardElement = document.getElementById('discardPile');
+            if (discardElement && gameState.gameLog) {
+                discardElement.innerHTML = '';
                 gameState.gameLog
                     .filter(log => log.type === 'discard')
-                    .slice(-18) // 最新18枚
-                    .forEach(log => {
-                        if (log.data && log.data.tile) {
-                            const tileElement = document.createElement('div');
-                            tileElement.className = 'discard-tile';
-                            if (log.data.tile.isRed) tileElement.classList.add('red');
-                            tileElement.textContent = log.data.tile.displayName || log.data.tile.unicode;
-                            centralDiscardsElement.appendChild(tileElement);
-                        }
-                    });
-            }
-
-            // プレイヤーの捨て牌更新
-            const playerDiscardsElement = document.getElementById('playerDiscards');
-            if (playerDiscardsElement && gameState.gameLog) {
-                playerDiscardsElement.innerHTML = '';
-                gameState.gameLog
-                    .filter(log => log.type === 'discard' && log.playerId === 'player_0')
                     .forEach(log => {
                         if (log.data && log.data.tile) {
                             const tileElement = document.createElement('div');
                             tileElement.className = 'tile';
                             if (log.data.tile.isRed) tileElement.classList.add('red');
                             tileElement.textContent = log.data.tile.displayName || log.data.tile.unicode;
-                            playerDiscardsElement.appendChild(tileElement);
+                            discardElement.appendChild(tileElement);
                         }
                     });
             }
@@ -783,10 +745,11 @@
             
             let statusText = `${currentPlayerName}のターン`;
             if (isMyTurn) {
+                statusText += ` | あなたの手牌: ${handCount}枚`;
                 if (handCount === 13) {
-                    statusText = 'ツモしてください';
+                    statusText += ` | ツモしてください`;
                 } else if (handCount === 14) {
-                    statusText = '打牌してください';
+                    statusText += ` | 打牌してください`;
                 }
             }
             
@@ -796,11 +759,13 @@
 
         // 牌選択
         function selectTile(playerIndex, tileIndex, tile) {
+            // プレイヤー0（自分）以外の牌は選択不可
             if (playerIndex !== 0) {
                 showNotification('自分の牌のみ選択できます', 'warning');
                 return;
             }
             
+            // 自分のターンでない場合は選択不可
             if (gameState && gameState.currentPlayer !== 0) {
                 showNotification('あなたのターンではありません', 'warning');
                 return;
@@ -819,7 +784,7 @@
             selectedTile = { playerIndex, tileIndex, tile };
             document.getElementById('hand0').children[tileIndex].classList.add('selected');
             soundManager.playTileSelect();
-            showNotification(`${tile.displayName || tile.unicode} を選択（再クリックで打牌）`, 'info');
+            showNotification(`${tile.displayName || tile.unicode} を選択しました（再クリックで打牌）`, 'info');
         }
 
         // 打牌処理
@@ -859,7 +824,7 @@
             }
         }
 
-        // ツモ処理
+        // その他のゲーム関数（元のコードから移植）
         async function drawTile() {
             if (!gameId) return;
             
@@ -888,7 +853,6 @@
             }
         }
 
-        // ゲーム状態取得
         async function requestGameState() {
             if (!gameId) return;
             
@@ -909,7 +873,6 @@
             }
         }
 
-        // AI実行
         async function executeAI() {
             if (!gameId) return;
             
@@ -935,11 +898,11 @@
         }
 
         // 鳴き関数
-        function callChi() { showNotification('チー機能は実装済みです', 'info'); }
-        function callPon() { showNotification('ポン機能は実装済みです', 'info'); }
-        function callKan() { showNotification('カン機能は実装済みです', 'info'); }
-        function callTsumo() { showNotification('ツモ機能は実装済みです', 'info'); }
-        function callRon() { showNotification('ロン機能は実装済みです', 'info'); }
+        function callChi() { showNotification('チー機能は開発中です', 'warning'); }
+        function callPon() { showNotification('ポン機能は開発中です', 'warning'); }
+        function callKan() { showNotification('カン機能は開発中です', 'warning'); }
+        function callTsumo() { showNotification('ツモ機能は開発中です', 'warning'); }
+        function callRon() { showNotification('ロン機能は開発中です', 'warning'); }
 
         function toggleDebug() {
             debugMode = !debugMode;
