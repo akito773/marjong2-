@@ -173,33 +173,91 @@
             height: 20px;
         }
 
-        /* 中央の捨て牌エリア */
-        .center-discard-area {
+        /* 本格麻雀の河レイアウト */
+        .mahjong-center {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 300px;
-            height: 200px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 12px;
-            padding: 15px;
+            width: 400px;
+            height: 300px;
             display: flex;
             flex-direction: column;
-            align-items: center;
+            justify-content: space-between;
         }
 
+        .rivers-horizontal {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex: 1;
+        }
+
+        .river-area {
+            display: grid;
+            gap: 1px;
+            padding: 4px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 6px;
+        }
+
+        /* 上下の河（横向き6×3） */
+        .river-top, .river-bottom {
+            grid-template-columns: repeat(6, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            width: 150px;
+            height: 60px;
+            margin: 0 auto;
+        }
+
+        /* 左右の河（縦向き3×6） */
+        .river-left, .river-right {
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(6, 1fr);
+            width: 60px;
+            height: 150px;
+        }
+
+        /* 河の牌スタイル */
+        .river-tile {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 8px;
+            font-weight: 600;
+            cursor: default;
+            min-width: 18px;
+            min-height: 18px;
+        }
+
+        .river-tile.red {
+            color: #dc3545;
+        }
+
+        .river-tile.reach {
+            transform: rotate(90deg);
+            background: #ffe6e6;
+            border-color: #ff9999;
+        }
+
+        /* 中央情報エリア */
         .center-info {
             color: white;
             text-align: center;
-            margin-bottom: 10px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 12px;
+            padding: 15px;
+            min-width: 120px;
         }
 
         .round-info {
             font-size: 1.1rem;
             font-weight: 600;
             color: #ffc107;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
         }
 
         .dora-info {
@@ -207,28 +265,21 @@
             padding: 5px 10px;
             border-radius: 6px;
             font-size: 0.8rem;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
-        .central-discards {
-            display: grid;
-            grid-template-columns: repeat(6, 1fr);
-            gap: 3px;
-            max-height: 120px;
-            overflow-y: auto;
+        .remaining-tiles {
+            font-size: 0.7rem;
+            color: #ccc;
         }
 
-        .discard-tile {
-            font-size: 16px;
-            width: 24px;
-            height: 32px;
-            background: rgba(255, 255, 255, 0.8);
-            border: 1px solid #ccc;
-            border-radius: 3px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: default;
+        /* 下部プレイヤーの河は逆順配置 */
+        .river-bottom {
+            direction: rtl;
+        }
+
+        .river-bottom .river-tile {
+            direction: ltr;
         }
 
         /* プレイヤーエリア（下部） */
@@ -552,7 +603,6 @@
                     <div class="player-wind">西</div>
                 </div>
                 <div class="opponent-tiles" id="hand2"></div>
-                <div class="player-discard-area" id="player2Discards"></div>
             </div>
 
             <!-- 右側プレイヤー -->
@@ -562,7 +612,6 @@
                     <div class="player-wind">北</div>
                 </div>
                 <div class="opponent-tiles" id="hand3"></div>
-                <div class="player-discard-area" id="player3Discards"></div>
             </div>
 
             <!-- 左側プレイヤー -->
@@ -572,18 +621,35 @@
                     <div class="player-wind">南</div>
                 </div>
                 <div class="opponent-tiles" id="hand1"></div>
-                <div class="player-discard-area" id="player1Discards"></div>
             </div>
 
-            <!-- 中央の捨て牌エリア -->
-            <div class="center-discard-area">
-                <div class="center-info">
-                    <div class="round-info" id="roundInfo">東1局</div>
-                    <div class="dora-info">
-                        ドラ: <span id="doraIndicator">🀫</span>
+            <!-- 中央の河エリア（本格麻雀レイアウト） -->
+            <div class="mahjong-center">
+                <!-- 上側プレイヤーの河 -->
+                <div class="river-area river-top" id="river2"></div>
+                
+                <!-- 左右の河と中央情報 -->
+                <div class="rivers-horizontal">
+                    <!-- 左側プレイヤーの河 -->
+                    <div class="river-area river-left" id="river1"></div>
+                    
+                    <!-- 中央情報エリア -->
+                    <div class="center-info">
+                        <div class="round-info" id="roundInfo">東1局</div>
+                        <div class="dora-info">
+                            ドラ: <span id="doraIndicator">🀫</span>
+                        </div>
+                        <div class="remaining-tiles">
+                            残り: <span id="remainingTilesDisplay">69</span>枚
+                        </div>
                     </div>
+                    
+                    <!-- 右側プレイヤーの河 -->
+                    <div class="river-area river-right" id="river3"></div>
                 </div>
-                <div class="central-discards" id="centralDiscards"></div>
+                
+                <!-- 下側プレイヤーの河 -->
+                <div class="river-area river-bottom" id="river0"></div>
             </div>
         </div>
 
@@ -604,10 +670,6 @@
             
             <div class="player-hand" id="hand0"></div>
             
-            <div class="player-discards">
-                <div class="player-discards-title">あなたの捨て牌</div>
-                <div class="player-discard-tiles" id="player0Discards"></div>
-            </div>
         </div>
 
         <!-- 情報パネル -->
@@ -857,43 +919,70 @@
                 console.error('🔍 DEBUG: Error updating player info:', error);
             }
 
-            // 各プレイヤーの捨て牌更新
+            // 各プレイヤーの河更新（本格麻雀仕様）
             if (gameState.players) {
                 gameState.players.forEach((player, playerIndex) => {
-                    const discardElement = document.getElementById(`player${playerIndex}Discards`);
-                    if (discardElement && player.hand && player.hand.discards) {
-                        discardElement.innerHTML = '';
-                        player.hand.discards.forEach((tile, index) => {
+                    const riverElement = document.getElementById(`river${playerIndex}`);
+                    if (riverElement && player.hand && player.hand.discards) {
+                        riverElement.innerHTML = '';
+                        
+                        player.hand.discards.forEach((tile, discardIndex) => {
                             const tileElement = document.createElement('div');
-                            tileElement.className = 'tile discard-tile';
+                            tileElement.className = 'river-tile';
+                            
+                            // 赤牌処理
                             if (tile.isRed) tileElement.classList.add('red');
+                            
+                            // リーチ宣言牌は横向き
+                            if (player.hand.riichi && player.hand.riichiTile && 
+                                isSameTile(tile, player.hand.riichiTile)) {
+                                tileElement.classList.add('reach');
+                            }
+                            
                             tileElement.textContent = tile.displayName || tile.unicode;
-                            tileElement.style.order = index; // 順序保持
-                            discardElement.appendChild(tileElement);
+                            
+                            // 6×3グリッドの配置順序
+                            const gridOrder = calculateRiverOrder(playerIndex, discardIndex);
+                            tileElement.style.order = gridOrder;
+                            
+                            riverElement.appendChild(tileElement);
                         });
                     }
                 });
             }
 
-            // 中央の捨て牌エリアは維持（ドラ表示用）
-            const centralDiscardsElement = document.getElementById('centralDiscards');
-            if (centralDiscardsElement) {
-                // 中央エリアは最新の捨牌情報のみ表示
-                centralDiscardsElement.innerHTML = '<div style="color: #ffc107; font-weight: bold;">最新の捨牌</div>';
-                if (gameState.gameLog) {
-                    const lastDiscard = gameState.gameLog.filter(log => log.type === 'discard').pop();
-                    if (lastDiscard && lastDiscard.data && lastDiscard.data.tile) {
-                        const tileElement = document.createElement('div');
-                        tileElement.className = 'discard-tile';
-                        if (lastDiscard.data.tile.isRed) tileElement.classList.add('red');
-                        tileElement.textContent = lastDiscard.data.tile.displayName || lastDiscard.data.tile.unicode;
-                        centralDiscardsElement.appendChild(tileElement);
-                    }
-                }
-            }
-
             // ゲームステータス更新
             updateGameStatus();
+        }
+
+        // 河の配置順序計算（本格麻雀仕様）
+        function calculateRiverOrder(playerIndex, discardIndex) {
+            // 6×3のグリッドで、プレイヤーごとに捨牌の向きが異なる
+            const row = Math.floor(discardIndex / 6);
+            const col = discardIndex % 6;
+            
+            switch (playerIndex) {
+                case 0: // 下部プレイヤー（自分）：左から右、上から下
+                    return row * 6 + col;
+                case 1: // 左プレイヤー：上から下、左から右（3×6）
+                    return Math.floor(discardIndex / 3) * 3 + (discardIndex % 3);
+                case 2: // 上部プレイヤー：右から左、下から上
+                    return (2 - row) * 6 + (5 - col);
+                case 3: // 右プレイヤー：下から上、右から左（3×6）
+                    return (5 - Math.floor(discardIndex / 3)) * 3 + (2 - (discardIndex % 3));
+                default:
+                    return discardIndex;
+            }
+        }
+        
+        // 牌が同じかチェック
+        function isSameTile(tile1, tile2) {
+            if (!tile1 || !tile2) return false;
+            if (tile1.suit !== tile2.suit) return false;
+            if (tile1.suit === 'ji') {
+                return tile1.honor === tile2.honor;
+            }
+            return tile1.rank === tile2.rank;
         }
 
         // ゲームステータス更新
