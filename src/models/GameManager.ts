@@ -296,12 +296,7 @@ export class GameManager {
 
     // 次のプレイヤーにツモ（鳴きがない場合）
     if (this.actionQueue.length === 0) {
-      if (!this.debugMode) {
-        this.nextTurn();
-      } else {
-        // デバッグモード時は手動でターン管理
-        this.setNextPlayerTurn();
-      }
+      this.nextTurn(); // デバッグモードでも自動でターンを進める
     }
 
     // ゲーム状態を更新
