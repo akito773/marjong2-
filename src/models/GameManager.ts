@@ -651,6 +651,14 @@ export class GameManager {
       console.log(`⚠️ AI判断失敗: ${currentPlayer.name} - AI決定がnull`);
       return []; // 何もしない
     }
+    
+    // tsumo判定が間違っている場合は強制的に捨牌に変更
+    if (aiDecision.type === 'tsumo' && currentPlayer.hand.tiles.length === 14) {
+      console.log(`🚫 ${currentPlayer.name} tsumo判定エラー回避 - 強制捨牌に変更`);
+      const randomTile = currentPlayer.hand.tiles[Math.floor(Math.random() * currentPlayer.hand.tiles.length)];
+      aiDecision.type = 'discard';
+      aiDecision.tile = randomTile;
+    }
 
     // AI決定を実行
     try {
