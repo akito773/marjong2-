@@ -762,11 +762,44 @@
             if (!gameState || !statusElement) return;
 
             const currentPlayerName = gameState.players[gameState.currentPlayer]?.name;
-            statusElement.textContent = `${currentPlayerName}のターン`;
+            const playerHand = gameState.players[0].hand.tiles;
+            const handCount = playerHand ? playerHand.length : 0;
+            const isMyTurn = gameState.currentPlayer === 0;
+            
+            let statusText = `${currentPlayerName}のターン`;
+            if (isMyTurn) {
+                statusText += ` | あなたの手牌: ${handCount}枚`;
+                if (handCount === 13) {
+                    statusText += ` | ツモしてください`;
+                } else if (handCount === 14) {
+                    statusText += ` | 打牌してください`;
+                }
+            }
+            
+            statusElement.textContent = statusText;
+            statusElement.style.color = isMyTurn ? '#28a745' : '#6c757d';
         }
 
         // 牌選択
         function selectTile(playerIndex, tileIndex, tile) {
+            // プレイヤー0（自分）以外の牌は選択不可
+            if (playerIndex !== 0) {
+                showNotification('自分の牌のみ選択できます', 'warning');
+                return;
+            }
+            
+            // 自分のターンでない場合は選択不可
+            if (gameState && gameState.currentPlayer !== 0) {
+                showNotification('あなたのターンではありません', 'warning');
+                return;
+            }
+
+            // 既に選択されている牌をクリックした場合は打牌
+            if (selectedTile && selectedTile.tileIndex === tileIndex && selectedTile.tile.id === tile.id) {
+                discardSelected();
+                return;
+            }
+
             // 選択状態をクリア
             document.querySelectorAll('.tile.selected').forEach(el => {
                 el.classList.remove('selected');
@@ -779,7 +812,7 @@
             // 牌選択音効
             soundManager.playSound('tileSelect');
             
-            showNotification(`${tile.displayName || tile.unicode}を選択しました`, 'info');
+            showNotification(`${tile.displayName || tile.unicode}を選択しました。もう一度クリックで打牌`, 'info');
         }
 
         // プレイヤーアクション
@@ -823,6 +856,19 @@
 
         // 個別アクション関数
         function drawTile() {
+            // 現在のプレイヤーかチェック
+            if (gameState.currentPlayer !== 0) {
+                showNotification('あなたのターンではありません', 'warning');
+                return;
+            }
+            
+            // 手牌が13枚かチェック
+            const playerHand = gameState.players[0].hand.tiles;
+            if (playerHand.length !== 13) {
+                showNotification(`手牌が${playerHand.length}枚です。ツモは13枚の時のみ可能です`, 'warning');
+                return;
+            }
+            
             sendAction('draw');
         }
 
@@ -831,6 +877,20 @@
                 showNotification('捨てる牌を選択してください', 'warning');
                 return;
             }
+            
+            // 現在のプレイヤーかチェック
+            if (gameState.currentPlayer !== 0) {
+                showNotification('あなたのターンではありません', 'warning');
+                return;
+            }
+            
+            // 手牌が14枚かチェック
+            const playerHand = gameState.players[0].hand.tiles;
+            if (playerHand.length !== 14) {
+                showNotification(`手牌が${playerHand.length}枚です。打牌は14枚の時のみ可能です`, 'warning');
+                return;
+            }
+            
             sendAction('discard', { tile: selectedTile.tile });
             clearSelection();
         }

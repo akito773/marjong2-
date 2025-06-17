@@ -22,7 +22,7 @@ export interface Player {
 
 // プレイヤーのアクション
 export interface PlayerAction {
-  readonly type: 'discard' | 'chi' | 'pon' | 'kan' | 'riichi' | 'tsumo' | 'ron' | 'pass';
+  readonly type: 'draw' | 'discard' | 'chi' | 'pon' | 'kan' | 'riichi' | 'tsumo' | 'ron' | 'pass';
   readonly playerId: string;
   readonly tile?: Tile;
   readonly meld?: Meld;

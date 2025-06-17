@@ -46,6 +46,12 @@ export class GameManager {
     // ゲーム状態初期化
     this.gameState = this.createInitialGameState(gameId, settings);
 
+    // AI対戦の場合はデバッグモードを有効にして手動操作を許可
+    if (playerNames.includes('CPU東') || playerNames.includes('CPU南') || playerNames.includes('CPU西')) {
+      this.debugMode = true;
+      console.log(`🔧 デバッグモード有効: 手動操作が可能です`);
+    }
+
     console.log(`🎮 ゲーム開始: ${gameId}`);
     console.log(`👥 プレイヤー: ${playerNames.join(', ')}`);
   }
@@ -173,6 +179,9 @@ export class GameManager {
 
     try {
       switch (action.type) {
+        case 'draw':
+          actions.push(...this.processDraw(player));
+          break;
         case 'discard':
           actions.push(...this.processDiscard(player, action));
           break;
@@ -212,6 +221,37 @@ export class GameManager {
     }
 
     return actions;
+  }
+
+  // ツモ処理
+  private processDraw(player: Player): GameAction[] {
+    // ターンチェック
+    if (!this.debugMode && this.gameState.currentPlayer !== player.position) {
+      throw new Error(`Not ${player.name}'s turn`);
+    }
+
+    // 手牌枚数チェック（13枚の時のみツモ可能）
+    if (player.hand.tiles.length !== 13) {
+      throw new Error(`${player.name}の手牌は${player.hand.tiles.length}枚です。ツモは13枚の時のみ可能です`);
+    }
+
+    // 牌をツモ
+    const drawnTile = this.tileManager.drawTile();
+    if (!drawnTile) {
+      throw new Error('ツモする牌がありません');
+    }
+
+    player.drawTile(drawnTile);
+
+    // ゲームアクションを記録
+    return [{
+      id: `draw_${Date.now()}`,
+      type: 'draw',
+      playerId: player.id,
+      data: { tile: drawnTile },
+      description: `${player.name}がツモ: ${drawnTile.displayName}`,
+      timestamp: Date.now(),
+    }];
   }
 
   // 捨牌処理
@@ -425,34 +465,6 @@ export class GameManager {
     }];
   }
 
-  // 次のターン（自動）
-  private nextTurn(): void {
-    const nextPlayer = (this.gameState.currentPlayer + 1) % 4;
-    const tile = this.tileManager.drawTile();
-
-    if (!tile) {
-      // 流局
-      (this.gameState as any).phase = 'finished';
-      this.addGameAction({
-        type: 'draw_game',
-        description: '流局',
-        timestamp: Date.now(),
-      });
-      return;
-    }
-
-    this.players[nextPlayer].drawTile(tile);
-    (this.gameState as any).currentPlayer = nextPlayer;
-
-    console.log(`🎯 ${this.players[nextPlayer].name}のターン`);
-  }
-
-  // デバッグモード用：ターンのみ変更（ツモは手動）
-  private setNextPlayerTurn(): void {
-    const nextPlayer = (this.gameState.currentPlayer + 1) % 4;
-    (this.gameState as any).currentPlayer = nextPlayer;
-    console.log(`🎯 デバッグモード: ${this.players[nextPlayer].name}のターン（ツモ待機中）`);
-  }
 
   // 手動ツモ処理
   manualDraw(playerId: string): { success: boolean; tile?: any; message: string } {
@@ -831,5 +843,44 @@ export class GameManager {
     }
     
     return false;
+  }
+
+  // ターン管理
+  private nextTurn(): void {
+    const nextPlayerIndex = (this.gameState.currentPlayer + 1) % 4;
+    
+    this.gameState = {
+      ...this.gameState,
+      currentPlayer: nextPlayerIndex
+    };
+    
+    // 次のプレイヤーに自動的にツモさせる
+    const nextPlayer = this.players[nextPlayerIndex];
+    if (nextPlayer) {
+      const drawnTile = this.tileManager.drawTile();
+      if (drawnTile) {
+        nextPlayer.drawTile(drawnTile);
+        
+        // ゲームログに記録
+        this.addGameAction({
+          type: 'draw',
+          description: `${nextPlayer.name}がツモ`,
+          timestamp: Date.now(),
+        });
+      }
+    }
+  }
+
+  private setNextPlayerTurn(): void {
+    const nextPlayerIndex = (this.gameState.currentPlayer + 1) % 4;
+    this.gameState = {
+      ...this.gameState,
+      currentPlayer: nextPlayerIndex
+    };
+  }
+
+  // デバッグモード用：手動ツモ
+  allowManualDraw(): boolean {
+    return this.debugMode || this.gameState.phase === 'waiting';
   }
 }
