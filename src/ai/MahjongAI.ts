@@ -410,6 +410,11 @@ export class MahjongAI {
     const melds = [...player.hand.melds];
     
     try {
+      // まず和了形かチェック
+      if (!HandAnalyzer.isWinningHand(hand, melds)) {
+        return false; // 和了形でなければ和了不可
+      }
+      
       // 役があるかチェック
       const yaku = HandAnalyzer.analyzeYaku(hand, melds, {
         isRiichi: player.status === 'riichi',
