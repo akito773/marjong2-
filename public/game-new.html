@@ -538,7 +538,7 @@
         </div>
 
         <!-- プレイヤーエリア（下部） -->
-        <div class="player-bottom-area">
+        <div class="player-bottom-area" id="player0">
             <div class="player-hand-header">
                 <div class="player-details">
                     <div class="player-name" id="playerName">あなた</div>
@@ -879,7 +879,7 @@
             // 新しい牌を選択
             selectedTile = { playerIndex, tileIndex, tile };
             document.getElementById('hand0').children[tileIndex].classList.add('selected');
-            soundManager.playTileSelect();
+            soundManager.playSound('tileSelect');
             showNotification(`${tile.displayName || tile.unicode} を選択（再クリックで打牌）`, 'info');
         }
 
@@ -909,7 +909,7 @@
                     gameState = result.data.gameState;
                     selectedTile = null;
                     updateGameDisplay();
-                    soundManager.playTilePlace();
+                    soundManager.playSound('tilePlace');
                     showNotification('打牌しました', 'success');
                 } else {
                     showNotification(result.message || '打牌に失敗しました', 'error');
@@ -938,7 +938,7 @@
                 if (result.status === 'OK') {
                     gameState = result.data.gameState;
                     updateGameDisplay();
-                    soundManager.playTilePlace();
+                    soundManager.playSound('tilePlace');
                     showNotification('ツモしました', 'success');
                 } else {
                     showNotification(result.message || 'ツモに失敗しました', 'error');
@@ -958,7 +958,14 @@
                 const result = await response.json();
                 
                 if (result.status === 'OK') {
-                    gameState = result.data;
+                    console.log('🔍 DEBUG: API response:', result);
+                    // APIレスポンスの構造に応じて適切にgameStateを設定
+                    if (result.data.gameState) {
+                        gameState = result.data.gameState;
+                    } else {
+                        gameState = result.data;
+                    }
+                    console.log('🔍 DEBUG: Set gameState to:', gameState);
                     updateGameDisplay();
                     showNotification('状態を更新しました', 'success');
                 } else {
@@ -984,7 +991,7 @@
                 if (result.status === 'OK') {
                     gameState = result.data.gameState;
                     updateGameDisplay();
-                    soundManager.playTilePlace();
+                    soundManager.playSound('tilePlace');
                     showNotification(result.message || 'AI が行動しました', 'success');
                 } else {
                     showNotification(result.message || 'AI実行に失敗しました', 'error');
