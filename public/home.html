@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🀄 麻雀ゲーム - オンライン麻雀を楽しもう</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0f5132;
+            --secondary: #20c997;
+            --accent: #ffc107;
+            --danger: #dc3545;
+            --success: #198754;
+            --card-bg: rgba(255, 255, 255, 0.95);
+            --shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+            --border-radius: 16px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background: linear-gradient(135deg, var(--primary) 0%, #2d5a41 50%, var(--secondary) 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        /* ヘッダー */
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            padding: 1rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            color: var(--accent);
+            font-size: 2rem;
+            font-weight: 700;
+            text-decoration: none;
+            animation: glow 3s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 10px rgba(255, 193, 7, 0.5); }
+            to { text-shadow: 0 0 20px rgba(255, 193, 7, 0.8), 0 0 30px rgba(255, 193, 7, 0.6); }
+        }
+
+        /* ヒーロー */
+        .hero {
+            text-align: center;
+            padding: 4rem 0;
+            color: white;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            background: linear-gradient(45deg, var(--accent), #fd7e14);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.3rem;
+            opacity: 0.9;
+            margin-bottom: 3rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* ゲームカード */
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+            margin: 3rem 0;
+        }
+
+        .game-card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            transition: all 0.3s ease;
+            border-top: 4px solid var(--primary);
+        }
+
+        .game-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .game-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 1.5rem;
+            font-size: 2rem;
+            color: white;
+        }
+
+        .game-card h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            text-align: center;
+            color: var(--primary);
+        }
+
+        .game-card p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+            text-align: center;
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(15, 81, 50, 0.3);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, var(--accent), #fd7e14);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 193, 7, 0.3);
+        }
+
+        /* 特徴 */
+        .features {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: var(--border-radius);
+            padding: 3rem;
+            margin: 3rem 0;
+            color: white;
+        }
+
+        .features h2 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 3rem;
+            color: var(--accent);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+        }
+
+        .feature {
+            text-align: center;
+            padding: 1.5rem;
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .feature h3 {
+            font-size: 1.3rem;
+            margin-bottom: 1rem;
+            color: var(--accent);
+        }
+
+        /* フッター */
+        .footer {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 2rem 0;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 4rem;
+        }
+
+        /* レスポンシブ */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero p {
+                font-size: 1.1rem;
+            }
+
+            .games-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* アニメーション */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.8s ease;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <!-- ヘッダー -->
+    <header class="header">
+        <nav class="nav container">
+            <a href="/title.html" class="logo">🀄 麻雀ゲーム</a>
+        </nav>
+    </header>
+
+    <!-- ヒーロー -->
+    <section class="hero">
+        <div class="container">
+            <h1>オンライン麻雀ゲーム</h1>
+            <p>
+                本格的な4人打ち麻雀をブラウザで楽しめます。<br>
+                リアルタイムマルチプレイヤー対応、AI対戦機能搭載。
+            </p>
+        </div>
+    </section>
+
+    <!-- ゲームモード -->
+    <section class="container">
+        <div class="games-grid">
+            <div class="game-card fade-in">
+                <div class="game-icon">👥</div>
+                <h3>マルチプレイヤー</h3>
+                <p>
+                    世界中のプレイヤーとリアルタイムで対戦。
+                    Socket.IOによる安定した通信で快適なゲーム体験。
+                </p>
+                <a href="/multiplayer-new.html" class="btn btn-primary">オンライン対戦</a>
+            </div>
+
+            <div class="game-card fade-in">
+                <div class="game-icon">🤖</div>
+                <h3>AI対戦</h3>
+                <p>
+                    高度なAIエンジンを搭載。初心者から上級者まで、
+                    自分のレベルに合わせて練習できます。
+                </p>
+                <a href="/game-new.html" class="btn btn-secondary">AI対戦</a>
+            </div>
+
+            <div class="game-card fade-in">
+                <div class="game-icon">🎯</div>
+                <h3>クラシックモード</h3>
+                <p>
+                    従来のUIでのゲーム体験。デバッグ機能付きで
+                    開発者向けのテスト環境としても利用可能。
+                </p>
+                <a href="/game.html" class="btn btn-primary">クラシック版</a>
+            </div>
+
+            <div class="game-card fade-in">
+                <div class="game-icon">📊</div>
+                <h3>統計・記録</h3>
+                <p>
+                    ゲーム成績の確認、プレイヤーランキング、
+                    ゲーム履歴、実績システムでより深く麻雀を楽しめます。
+                </p>
+                <a href="/stats.html" class="btn btn-primary">統計を見る</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- 特徴 -->
+    <section class="features">
+        <div class="container">
+            <h2>ゲームの特徴</h2>
+            <div class="features-grid">
+                <div class="feature fade-in">
+                    <span class="feature-icon">⚡</span>
+                    <h3>リアルタイム対戦</h3>
+                    <p>遅延のない快適なオンライン対戦</p>
+                </div>
+                <div class="feature fade-in">
+                    <span class="feature-icon">🧠</span>
+                    <h3>高度なAI</h3>
+                    <p>戦略的思考を持つAIエンジン</p>
+                </div>
+                <div class="feature fade-in">
+                    <span class="feature-icon">🎨</span>
+                    <h3>美しいUI</h3>
+                    <p>モダンで直感的なデザイン</p>
+                </div>
+                <div class="feature fade-in">
+                    <span class="feature-icon">📱</span>
+                    <h3>レスポンシブ</h3>
+                    <p>PC・タブレット・スマホ対応</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- フッター -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2024 麻雀ゲーム. 高品質なオンライン麻雀体験をお届けします。</p>
+        </div>
+    </footer>
+
+    <script>
+        // スクロールアニメーション
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, observerOptions);
+
+        // アニメーション対象要素を監視
+        document.querySelectorAll('.fade-in').forEach(el => {
+            observer.observe(el);
+        });
+
+        // ボタンクリック時のローディング
+        document.querySelectorAll('.btn').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                // ローディング表示
+                this.style.opacity = '0.7';
+                this.style.pointerEvents = 'none';
+                
+                // 少し遅延してページ遷移
+                setTimeout(() => {
+                    window.location.href = this.href;
+                }, 300);
+                
+                e.preventDefault();
+            });
+        });
+
+        // パフォーマンス最適化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 初期表示のアニメーション
+            setTimeout(() => {
+                document.querySelectorAll('.fade-in').forEach((el, index) => {
+                    setTimeout(() => {
+                        el.classList.add('visible');
+                    }, index * 100);
+                });
+            }, 200);
+        });
+    </script>
+</body>
+</html>

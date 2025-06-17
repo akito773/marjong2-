@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 麻雀ゲーム - 統計・記録</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0f5132;
+            --secondary: #20c997;
+            --accent: #ffc107;
+            --danger: #dc3545;
+            --success: #198754;
+            --info: #0dcaf0;
+            --warning: #fd7e14;
+            --card-bg: rgba(255, 255, 255, 0.95);
+            --shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+            --border-radius: 16px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background: linear-gradient(135deg, var(--primary) 0%, #2d5a41 50%, var(--secondary) 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* ヘッダー */
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border-bottom: 2px solid var(--accent);
+            padding: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            margin-bottom: 2rem;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .logo {
+            color: var(--accent);
+            font-size: 1.8rem;
+            font-weight: 700;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .nav-link {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* タイトル */
+        .page-title {
+            text-align: center;
+            color: white;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 3rem;
+        }
+
+        /* タブナビゲーション */
+        .tab-navigation {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 2rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 0.5rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            background: var(--accent);
+            color: #333;
+        }
+
+        .tab-btn:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* タブコンテンツ */
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* カードグリッド */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            transition: transform 0.3s ease;
+            border-top: 4px solid var(--primary);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+        }
+
+        .card-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent);
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            text-align: center;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        /* ランキングテーブル */
+        .ranking-table {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .table-header {
+            background: var(--primary);
+            color: white;
+            padding: 1rem;
+            margin: -2rem -2rem 1rem -2rem;
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .rank-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .rank-1 { background: #ffd700; color: #333; }
+        .rank-2 { background: #c0c0c0; color: #333; }
+        .rank-3 { background: #cd7f32; color: white; }
+        .rank-other { background: var(--info); }
+
+        /* ゲーム履歴 */
+        .game-history {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            box-shadow: var(--shadow);
+        }
+
+        .history-item {
+            padding: 1rem;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .history-item:last-child {
+            border-bottom: none;
+        }
+
+        .game-info {
+            flex: 1;
+        }
+
+        .game-date {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .game-result {
+            font-weight: 600;
+            margin-top: 0.5rem;
+        }
+
+        .win { color: var(--success); }
+        .loss { color: var(--danger); }
+
+        .game-details {
+            text-align: right;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        /* 実績 */
+        .achievements-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .achievement {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .achievement.unlocked {
+            border-color: var(--accent);
+        }
+
+        .achievement.locked {
+            opacity: 0.5;
+            filter: grayscale(100%);
+        }
+
+        .achievement-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .achievement-name {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--primary);
+        }
+
+        .achievement-desc {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .rarity-common { border-left: 4px solid #6c757d; }
+        .rarity-rare { border-left: 4px solid #0dcaf0; }
+        .rarity-epic { border-left: 4px solid #6f42c1; }
+        .rarity-legendary { border-left: 4px solid #fd7e14; }
+
+        /* レスポンシブ */
+        @media (max-width: 768px) {
+            .tab-navigation {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .achievements-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .history-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            table {
+                font-size: 0.9rem;
+            }
+
+            th, td {
+                padding: 8px;
+            }
+        }
+
+        /* ローディング */
+        .loading {
+            text-align: center;
+            padding: 3rem;
+            color: white;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--accent);
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 空の状態 */
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+        }
+
+        .empty-state-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body>
+    <!-- ヘッダー -->
+    <header class="header">
+        <nav class="nav">
+            <a href="/title.html" class="logo">🀄 麻雀ゲーム</a>
+            <div class="nav-links">
+                <a href="/title.html" class="nav-link">タイトル</a>
+                <a href="/game-new.html" class="nav-link">AI対戦</a>
+                <a href="/multiplayer-new.html" class="nav-link">マルチプレイヤー</a>
+                <a href="/stats.html" class="nav-link">統計</a>
+            </div>
+        </nav>
+    </header>
+
+    <div class="container">
+        <h1 class="page-title">📊 統計・記録</h1>
+
+        <!-- タブナビゲーション -->
+        <div class="tab-navigation">
+            <button class="tab-btn active" onclick="showTab('overview')">概要</button>
+            <button class="tab-btn" onclick="showTab('rankings')">ランキング</button>
+            <button class="tab-btn" onclick="showTab('history')">ゲーム履歴</button>
+            <button class="tab-btn" onclick="showTab('achievements')">実績</button>
+        </div>
+
+        <!-- 概要タブ -->
+        <div class="tab-content active" id="overview">
+            <div class="cards-grid">
+                <div class="stat-card">
+                    <div class="card-header">
+                        <div class="card-icon">🎮</div>
+                        <div class="card-title">総ゲーム数</div>
+                    </div>
+                    <div class="stat-value" id="totalGames">-</div>
+                    <div class="stat-label">プレイしたゲーム</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="card-header">
+                        <div class="card-icon">👥</div>
+                        <div class="card-title">総プレイヤー数</div>
+                    </div>
+                    <div class="stat-value" id="totalPlayers">-</div>
+                    <div class="stat-label">登録プレイヤー</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="card-header">
+                        <div class="card-icon">⏱️</div>
+                        <div class="card-title">平均ゲーム時間</div>
+                    </div>
+                    <div class="stat-value" id="avgGameTime">-</div>
+                    <div class="stat-label">分</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="card-header">
+                        <div class="card-icon">🏆</div>
+                        <div class="card-title">人気の役</div>
+                    </div>
+                    <div class="stat-value" id="popularYaku">-</div>
+                    <div class="stat-label">最も多く和了された役</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="card-header">
+                        <div class="card-icon">⭐</div>
+                        <div class="card-title">トッププレイヤー</div>
+                    </div>
+                    <div class="stat-value" id="topPlayer">-</div>
+                    <div class="stat-label">最高レーティング</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="card-header">
+                        <div class="card-icon">🎯</div>
+                        <div class="card-title">あなたの勝率</div>
+                    </div>
+                    <div class="stat-value" id="myWinRate">-</div>
+                    <div class="stat-label">%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ランキングタブ -->
+        <div class="tab-content" id="rankings">
+            <div class="ranking-table">
+                <div class="table-header">🏆 プレイヤーランキング</div>
+                <table id="rankingTable">
+                    <thead>
+                        <tr>
+                            <th>順位</th>
+                            <th>プレイヤー名</th>
+                            <th>レーティング</th>
+                            <th>ランク</th>
+                            <th>勝率</th>
+                            <th>ゲーム数</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rankingTableBody">
+                        <tr><td colspan="6" class="loading">データを読み込み中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ゲーム履歴タブ -->
+        <div class="tab-content" id="history">
+            <div class="game-history">
+                <div class="table-header">📝 最近のゲーム</div>
+                <div id="gameHistoryContent">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <div>ゲーム履歴を読み込み中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 実績タブ -->
+        <div class="tab-content" id="achievements">
+            <div class="achievements-grid" id="achievementsGrid">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <div>実績を読み込み中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPlayerId = 'player_default';
+        let statsData = null;
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStats();
+            setInterval(loadStats, 30000); // 30秒ごとに更新
+        });
+
+        // 統計データを読み込み
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const result = await response.json();
+                
+                if (result.status === 'OK') {
+                    statsData = result.data;
+                    updateOverview();
+                    updateRankings();
+                    updateGameHistory();
+                    updateAchievements();
+                }
+            } catch (error) {
+                console.error('Stats loading error:', error);
+                showError('統計データの読み込みに失敗しました');
+            }
+        }
+
+        // 概要タブの更新
+        function updateOverview() {
+            if (!statsData) return;
+
+            const summary = statsData.summary;
+            const myStats = statsData.playerStats.find(p => p.playerId === currentPlayerId);
+
+            document.getElementById('totalGames').textContent = summary.totalGames.toLocaleString();
+            document.getElementById('totalPlayers').textContent = summary.totalPlayers.toLocaleString();
+            document.getElementById('avgGameTime').textContent = Math.round(summary.averageGameLength / 60);
+            document.getElementById('popularYaku').textContent = summary.mostPopularYaku;
+            document.getElementById('topPlayer').textContent = summary.topPlayer;
+            document.getElementById('myWinRate').textContent = myStats ? 
+                Math.round(myStats.winRate * 100) : '-';
+        }
+
+        // ランキングタブの更新
+        function updateRankings() {
+            if (!statsData) return;
+
+            const tbody = document.getElementById('rankingTableBody');
+            tbody.innerHTML = '';
+
+            if (statsData.playerStats.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">まだプレイヤーデータがありません</td></tr>';
+                return;
+            }
+
+            statsData.playerStats.forEach((player, index) => {
+                const row = document.createElement('tr');
+                const rank = index + 1;
+                
+                row.innerHTML = `
+                    <td><span class="rank-badge rank-${rank <= 3 ? rank : 'other'}">${rank}</span></td>
+                    <td>${player.playerName}</td>
+                    <td>${player.rating}</td>
+                    <td>${player.rank}</td>
+                    <td>${Math.round(player.winRate * 100)}%</td>
+                    <td>${player.totalGames}</td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        // ゲーム履歴の更新
+        function updateGameHistory() {
+            if (!statsData) return;
+
+            const content = document.getElementById('gameHistoryContent');
+            content.innerHTML = '';
+
+            if (statsData.gameRecords.length === 0) {
+                content.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📝</div>
+                        <div>まだゲーム履歴がありません</div>
+                    </div>
+                `;
+                return;
+            }
+
+            statsData.gameRecords.slice(0, 20).forEach(record => {
+                const item = document.createElement('div');
+                item.className = 'history-item';
+                
+                const date = new Date(record.startTime).toLocaleString('ja-JP');
+                const winner = record.winner !== undefined ? 
+                    record.players[record.winner].playerName : 'なし';
+                const duration = Math.round(record.gameLength / 60);
+                
+                item.innerHTML = `
+                    <div class="game-info">
+                        <div class="game-date">${date}</div>
+                        <div class="game-result">勝者: ${winner}</div>
+                    </div>
+                    <div class="game-details">
+                        <div>${record.gameType} | ${duration}分</div>
+                        <div>${record.totalHands}局</div>
+                    </div>
+                `;
+                
+                content.appendChild(item);
+            });
+        }
+
+        // 実績の更新
+        function updateAchievements() {
+            if (!statsData) return;
+
+            const grid = document.getElementById('achievementsGrid');
+            grid.innerHTML = '';
+
+            const allAchievements = [
+                { id: 'first_win', name: '初勝利', description: '初めて勝利しました', icon: '🎉', rarity: 'common' },
+                { id: 'ten_wins', name: '熟練者', description: '10勝を達成しました', icon: '🏆', rarity: 'rare' },
+                { id: 'yakuman', name: '役満達成', description: '役満を達成しました', icon: '💫', rarity: 'epic' },
+                { id: 'speed_demon', name: 'スピード狂', description: '5分以内にゲームを完了', icon: '⚡', rarity: 'rare' },
+                { id: 'marathon', name: 'マラソンランナー', description: '60分以上のゲームを完了', icon: '🏃', rarity: 'rare' },
+                { id: 'perfectionist', name: '完璧主義者', description: '一度もミスなくゲーム完了', icon: '✨', rarity: 'epic' },
+            ];
+
+            const myStats = statsData.playerStats.find(p => p.playerId === currentPlayerId);
+            const unlockedAchievements = myStats ? myStats.achievements.map(a => a.id) : [];
+
+            allAchievements.forEach(achievement => {
+                const item = document.createElement('div');
+                const isUnlocked = unlockedAchievements.includes(achievement.id);
+                
+                item.className = `achievement rarity-${achievement.rarity} ${isUnlocked ? 'unlocked' : 'locked'}`;
+                
+                item.innerHTML = `
+                    <div class="achievement-icon">${achievement.icon}</div>
+                    <div class="achievement-name">${achievement.name}</div>
+                    <div class="achievement-desc">${achievement.description}</div>
+                `;
+                
+                grid.appendChild(item);
+            });
+        }
+
+        // タブ切り替え
+        function showTab(tabName) {
+            // タブボタンの状態を更新
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // タブコンテンツの表示を切り替え
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        // エラー表示
+        function showError(message) {
+            console.error(message);
+            // 簡易的なエラー表示
+            document.querySelectorAll('.loading').forEach(element => {
+                element.innerHTML = `<div style="color: var(--danger);">エラー: ${message}</div>`;
+            });
+        }
+
+        // プレイヤーID設定（将来的にはログイン機能と連携）
+        function setCurrentPlayer(playerId) {
+            currentPlayerId = playerId;
+            loadStats();
+        }
+
+        // データリフレッシュ
+        function refreshData() {
+            document.querySelectorAll('.loading').forEach(element => {
+                element.innerHTML = `
+                    <div class="spinner"></div>
+                    <div>データを更新中...</div>
+                `;
+            });
+            loadStats();
+        }
+
+        // 統計データクリア（デバッグ用）
+        async function clearStats() {
+            if (confirm('すべての統計データを削除しますか？この操作は元に戻せません。')) {
+                try {
+                    const response = await fetch('/api/stats/clear', { method: 'DELETE' });
+                    const result = await response.json();
+                    
+                    if (result.status === 'OK') {
+                        alert('統計データをクリアしました');
+                        loadStats();
+                    } else {
+                        alert('エラー: ' + result.message);
+                    }
+                } catch (error) {
+                    alert('エラーが発生しました: ' + error.message);
+                }
+            }
+        }
+
+        // キーボードショートカット
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'r' || e.key === 'R') {
+                e.preventDefault();
+                refreshData();
+            }
+        });
+    </script>
+</body>
+</html>

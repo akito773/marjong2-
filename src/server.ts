@@ -5,6 +5,7 @@ import { createServer } from 'http';
 import { TileManager } from './models/TileManager';
 import { GameManager } from './models/GameManager';
 import { GameSessionManager } from './models/GameSession';
+import { GameRecordManager } from './models/GameRecord';
 
 const app = express();
 const server = createServer(app);
@@ -19,6 +20,7 @@ const PORT = process.env.PORT || 3000;
 
 // ゲームセッションマネージャー初期化
 const gameSessionManager = GameSessionManager.getInstance();
+const gameRecordManager = GameRecordManager.getInstance();
 
 // 静的ファイルの配信
 app.use(express.static('public'));
@@ -163,23 +165,16 @@ app.get('/api/game/test', (_req, res) => {
 app.post('/api/game/create', (req, res) => {
   try {
     const { playerNames } = req.body;
+    const names = playerNames || ['プレイヤー1', 'CPU東', 'CPU南', 'CPU西'];
     
-    if (!playerNames || !Array.isArray(playerNames) || playerNames.length !== 4) {
-      return res.status(400).json({
-        status: 'Error',
-        message: 'プレイヤー名4人分が必要です',
-      });
-    }
-
-    const gameId = gameSessionManager.createGame(playerNames);
-    const gameState = gameSessionManager.getGameState(gameId);
+    const game = gameSessionManager.createGame(names);
 
     return res.json({
       status: 'OK',
       message: '新しいゲームを作成しました',
       data: {
-        gameId,
-        gameState,
+        gameId: game.gameId,
+        gameState: game.getGameState(),
       },
     });
   } catch (error) {
@@ -479,14 +474,305 @@ app.get('/api/games', (req, res) => {
 io.on('connection', socket => {
   console.log(`🔌 クライアント接続: ${socket.id}`);
 
+  // ルーム作成
+  socket.on('createRoom', (data) => {
+    try {
+      const { playerId, playerName, settings } = data;
+      
+      // 新しいゲームを作成
+      const game = gameSessionManager.createGame();
+      const gameId = game.gameId;
+      
+      // ソケットをルームに参加させる
+      socket.join(gameId);
+      socket.data.playerId = playerId;
+      socket.data.playerName = playerName;
+      socket.data.roomId = gameId;
+      
+      // ゲーム状態を送信
+      socket.emit('roomCreated', {
+        roomId: gameId,
+        gameState: game.getGameState()
+      });
+      
+      console.log(`🎮 ルーム作成: ${gameId}, プレイヤー: ${playerName}`);
+    } catch (error) {
+      socket.emit('roomError', {
+        code: 'CREATE_ROOM_ERROR',
+        message: 'ルーム作成に失敗しました'
+      });
+    }
+  });
+
+  // ルーム参加
+  socket.on('joinRoom', (data) => {
+    try {
+      const { roomId, playerId, playerName } = data;
+      
+      // ゲームセッションを取得
+      const game = gameSessionManager.getGame(roomId);
+      if (!game) {
+        socket.emit('roomError', {
+          code: 'ROOM_NOT_FOUND',
+          message: 'ゲームルームが見つかりません'
+        });
+        return;
+      }
+      
+      // ソケットをルームに参加させる
+      socket.join(roomId);
+      socket.data.playerId = playerId;
+      socket.data.playerName = playerName;
+      socket.data.roomId = roomId;
+      
+      // 他のプレイヤーに通知
+      socket.to(roomId).emit('playerJoined', {
+        playerId,
+        playerName
+      });
+      
+      // ゲーム状態を送信
+      socket.emit('roomJoined', {
+        roomId,
+        gameState: game.getGameState()
+      });
+      
+      console.log(`🎮 ルーム参加: ${roomId}, プレイヤー: ${playerName}`);
+    } catch (error) {
+      socket.emit('roomError', {
+        code: 'JOIN_ROOM_ERROR',
+        message: 'ルーム参加に失敗しました'
+      });
+    }
+  });
+
+  // ルーム離脱
+  socket.on('leaveRoom', (data) => {
+    try {
+      const { roomId, playerId } = data;
+      
+      socket.leave(roomId);
+      
+      // 他のプレイヤーに通知
+      socket.to(roomId).emit('playerLeft', { playerId });
+      
+      // ソケットデータをクリア
+      socket.data.playerId = undefined;
+      socket.data.playerName = undefined;
+      socket.data.roomId = undefined;
+      
+      console.log(`🎮 ルーム離脱: ${roomId}, プレイヤー: ${playerId}`);
+    } catch (error) {
+      socket.emit('error', {
+        code: 'LEAVE_ROOM_ERROR',
+        message: 'ルーム離脱に失敗しました'
+      });
+    }
+  });
+
+  // プレイヤーアクション
+  socket.on('playerAction', (action) => {
+    try {
+      const roomId = socket.data.roomId;
+      if (!roomId) {
+        socket.emit('error', {
+          code: 'NO_ROOM',
+          message: 'ルームに参加していません'
+        });
+        return;
+      }
+
+      const game = gameSessionManager.getGame(roomId);
+      if (!game) {
+        socket.emit('error', {
+          code: 'GAME_NOT_FOUND',
+          message: 'ゲームが見つかりません'
+        });
+        return;
+      }
+
+      // アクションを実行
+      const actions = game.processAction(action);
+      
+      // ルーム全体にゲーム状態を送信
+      io.to(roomId).emit('gameUpdate', game.getGameState());
+      
+      // アクション結果を送信
+      socket.emit('actionResult', {
+        success: true,
+        message: `${action.type}を実行しました`,
+        action: action
+      });
+      
+      // 他のプレイヤーにアクションを通知
+      socket.to(roomId).emit('gameAction', {
+        type: action.type,
+        playerId: action.playerId,
+        data: action.data
+      });
+    } catch (error) {
+      socket.emit('error', {
+        code: 'ACTION_ERROR',
+        message: 'アクション処理に失敗しました',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // ゲーム状態要求
+  socket.on('requestGameState', () => {
+    try {
+      const roomId = socket.data.roomId;
+      if (!roomId) {
+        socket.emit('error', {
+          code: 'NO_ROOM',
+          message: 'ルームに参加していません'
+        });
+        return;
+      }
+
+      const game = gameSessionManager.getGame(roomId);
+      if (!game) {
+        socket.emit('error', {
+          code: 'GAME_NOT_FOUND',
+          message: 'ゲームが見つかりません'
+        });
+        return;
+      }
+
+      socket.emit('gameUpdate', game.getGameState());
+    } catch (error) {
+      socket.emit('error', {
+        code: 'STATE_REQUEST_ERROR',
+        message: 'ゲーム状態取得に失敗しました'
+      });
+    }
+  });
+
+  // 切断処理
   socket.on('disconnect', () => {
     console.log(`🔌 クライアント切断: ${socket.id}`);
+    
+    // ルームから離脱処理
+    const roomId = socket.data.roomId;
+    const playerId = socket.data.playerId;
+    
+    if (roomId && playerId) {
+      socket.to(roomId).emit('playerLeft', { playerId });
+    }
   });
 
   // テスト用イベント
   socket.on('ping', () => {
     socket.emit('pong', { timestamp: new Date().toISOString() });
   });
+});
+
+// 統計API
+app.get('/api/stats', (req, res) => {
+  try {
+    const summary = gameRecordManager.getStatsSummary();
+    const playerStats = gameRecordManager.getAllPlayerStats();
+    const gameRecords = gameRecordManager.getAllGameRecords();
+
+    return res.json({
+      status: 'OK',
+      message: '統計データ取得成功',
+      data: {
+        summary,
+        playerStats,
+        gameRecords: gameRecords.slice(0, 50), // 最新50件
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'Error',
+      message: '統計データ取得エラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// プレイヤー統計API
+app.get('/api/stats/player/:playerId', (req, res) => {
+  try {
+    const { playerId } = req.params;
+    const stats = gameRecordManager.getPlayerStats(playerId);
+
+    if (!stats) {
+      return res.status(404).json({
+        status: 'Error',
+        message: 'プレイヤーが見つかりません',
+      });
+    }
+
+    return res.json({
+      status: 'OK',
+      message: 'プレイヤー統計取得成功',
+      data: stats,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'Error',
+      message: 'プレイヤー統計取得エラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// ゲーム記録API
+app.get('/api/stats/game/:gameId', (req, res) => {
+  try {
+    const { gameId } = req.params;
+    const record = gameRecordManager.getGameRecord(gameId);
+
+    if (!record) {
+      return res.status(404).json({
+        status: 'Error',
+        message: 'ゲーム記録が見つかりません',
+      });
+    }
+
+    return res.json({
+      status: 'OK',
+      message: 'ゲーム記録取得成功',
+      data: record,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'Error',
+      message: 'ゲーム記録取得エラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// 統計データクリアAPI（デバッグ用）
+app.delete('/api/stats/clear', (req, res) => {
+  try {
+    gameRecordManager.clearAllData();
+    
+    return res.json({
+      status: 'OK',
+      message: '統計データをクリアしました',
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'Error',
+      message: '統計データクリアエラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
+// ルートパスのリダイレクト
+app.get('/', (req, res) => {
+  res.redirect('/title.html');
+});
+
+// ホームページのリダイレクト（後方互換性）
+app.get('/home', (req, res) => {
+  res.redirect('/home.html');
 });
 
 // 404エラーハンドリング

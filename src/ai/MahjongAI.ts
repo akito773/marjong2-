@@ -2,11 +2,13 @@ import { Tile } from '../../shared/types/Tile';
 import { Hand, Meld } from '../../shared/types/Hand';
 import { Player } from '../models/Player';
 import { GameState } from '../../shared/types/Game';
+import { WaitAnalyzer } from '../utils/WaitAnalyzer';
+import { ScoreCalculator } from '../utils/ScoreCalculator';
 
 // 麻雀AI思考エンジン
 export class MahjongAI {
   
-  // 簡易AI: 捨牌を決定
+  // 高度AI: 捨牌を決定
   static selectDiscardTile(player: Player, gameState: GameState): Tile | null {
     const tiles = [...player.hand.tiles];
     
@@ -14,22 +16,108 @@ export class MahjongAI {
       return null; // 14枚でない場合は捨牌できない
     }
 
-    // 優先度の高い順に捨牌候補を決定
+    // 待ち牌分析
+    const waitAnalysis = WaitAnalyzer.analyzeWaits(tiles, [...player.hand.melds]);
     
-    // 1. 字牌（役牌以外）を優先的に捨てる
-    const nonYakumanHonors = this.findNonYakumanHonors(tiles, gameState);
-    if (nonYakumanHonors.length > 0) {
-      return nonYakumanHonors[0];
+    // テンパイしている場合は危険度を考慮
+    if (waitAnalysis.tempai) {
+      return this.selectSafestDiscard(tiles, gameState, player);
     }
-
-    // 2. 端牌（1,9）で孤立しているもの
-    const isolatedTerminals = this.findIsolatedTerminals(tiles);
-    if (isolatedTerminals.length > 0) {
-      return isolatedTerminals[0];
+    
+    // 各牌の価値を評価して最適な捨て牌を選択
+    const tileScores = tiles.map(tile => ({
+      tile,
+      score: this.evaluateTileValue(tile, tiles, gameState, player)
+    }));
+    
+    // 最も価値の低い牌を捨てる
+    tileScores.sort((a, b) => a.score - b.score);
+    return tileScores[0].tile;
+  }
+  
+  // 牌の価値評価
+  private static evaluateTileValue(
+    tile: Tile, 
+    hand: Tile[], 
+    gameState: GameState, 
+    player: Player
+  ): number {
+    let score = 0;
+    
+    // 基本的な危険度（字牌・端牌は安全）
+    if (tile.honor) {
+      score -= 10; // 字牌は比較的安全
+    } else if (tile.rank === 1 || tile.rank === 9) {
+      score -= 5; // 端牌も比較的安全
     }
-
-    // 3. 最も不要そうな牌（簡易評価）
-    return this.findLeastUsefulTile(tiles);
+    
+    // 手牌改善への貢献度
+    const remainingHand = hand.filter(t => t !== tile);
+    const originalShanten = WaitAnalyzer.analyzeWaits(hand, [...player.hand.melds]).shanten;
+    const newShanten = WaitAnalyzer.analyzeWaits(remainingHand, [...player.hand.melds]).shanten;
+    
+    if (newShanten < originalShanten) {
+      score += 50; // シャンテンが進む場合は捨てやすい
+    } else if (newShanten > originalShanten) {
+      score -= 30; // シャンテンが戻る場合は捨てにくい
+    }
+    
+    // 同じ牌の枚数
+    const sameCount = hand.filter(t => 
+      t.suit === tile.suit && t.rank === tile.rank && t.honor === tile.honor
+    ).length;
+    if (sameCount >= 2) {
+      score += 20; // 重複牌は捨てやすい
+    }
+    
+    // リーチプレイヤーがいる場合の安全度
+    const hasRiichiPlayer = gameState.players.some(p => p.status === 'riichi');
+    if (hasRiichiPlayer) {
+      const opponentDiscards = gameState.players.map(p => [...p.hand.discards]);
+      const riichiPlayers = gameState.players.map(p => p.status === 'riichi');
+      const safety = WaitAnalyzer.isSafeTile(tile, opponentDiscards, riichiPlayers);
+      
+      switch (safety.safety) {
+        case 'safe':
+          score -= 30;
+          break;
+        case 'risky':
+          score += 10;
+          break;
+        case 'dangerous':
+          score += 50;
+          break;
+      }
+    }
+    
+    return score;
+  }
+  
+  // 最も安全な捨て牌を選択
+  private static selectSafestDiscard(
+    hand: Tile[], 
+    gameState: GameState, 
+    player: Player
+  ): Tile {
+    const opponentDiscards = gameState.players.map(p => [...p.hand.discards]);
+    const riichiPlayers = gameState.players.map(p => p.status === 'riichi');
+    
+    const safeTiles = hand.filter(tile => {
+      const safety = WaitAnalyzer.isSafeTile(tile, opponentDiscards, riichiPlayers);
+      return safety.safety === 'safe';
+    });
+    
+    if (safeTiles.length > 0) {
+      return safeTiles[0];
+    }
+    
+    // 安全牌がない場合は最もリスクの低い牌
+    const riskyTiles = hand.filter(tile => {
+      const safety = WaitAnalyzer.isSafeTile(tile, opponentDiscards, riichiPlayers);
+      return safety.safety === 'risky';
+    });
+    
+    return riskyTiles.length > 0 ? riskyTiles[0] : hand[0];
   }
 
   // ツモするかどうかを判定

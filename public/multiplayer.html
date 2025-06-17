@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>麻雀ゲーム - マルチプレイヤー</title>
+    <style>
+        body {
+            font-family: 'Noto Sans JP', Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #0f4c3a, #1a6b4f);
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .lobby {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+        
+        .game-container {
+            display: none;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+            max-width: 300px;
+        }
+        
+        button {
+            background: #ff6b47;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #e5593d;
+        }
+        
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        .game-board {
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            grid-template-rows: 1fr 2fr 1fr;
+            gap: 10px;
+            height: 600px;
+            margin: 20px 0;
+        }
+        
+        .player-area {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .player-north { grid-column: 2; grid-row: 1; }
+        .player-east { grid-column: 3; grid-row: 2; }
+        .player-south { grid-column: 2; grid-row: 3; }
+        .player-west { grid-column: 1; grid-row: 2; }
+        
+        .center-area {
+            grid-column: 2;
+            grid-row: 2;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .hand-tiles {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            margin: 10px 0;
+        }
+        
+        .tile {
+            background: white;
+            color: black;
+            border: 1px solid #333;
+            border-radius: 3px;
+            padding: 4px 6px;
+            font-size: 14px;
+            cursor: pointer;
+            min-width: 20px;
+            text-align: center;
+        }
+        
+        .tile:hover {
+            background: #f0f0f0;
+        }
+        
+        .tile.selected {
+            background: #ffeb3b;
+        }
+        
+        .current-player {
+            border: 3px solid #4caf50;
+        }
+        
+        .game-info {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        
+        .connected {
+            background: #4caf50;
+        }
+        
+        .disconnected {
+            background: #f44336;
+        }
+        
+        .message-log {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            padding: 10px;
+            height: 150px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        
+        .player-list {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        
+        .player-item {
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🀄 麻雀ゲーム - マルチプレイヤー</h1>
+        </div>
+        
+        <div class="connection-status disconnected" id="connectionStatus">
+            🔴 未接続
+        </div>
+        
+        <!-- ロビー画面 -->
+        <div class="lobby" id="lobby">
+            <h2>ゲームロビー</h2>
+            
+            <div class="form-group">
+                <label for="playerName">プレイヤー名:</label>
+                <input type="text" id="playerName" placeholder="名前を入力してください" value="プレイヤー1">
+            </div>
+            
+            <div class="form-group">
+                <label for="roomId">ルームID（参加時のみ）:</label>
+                <input type="text" id="roomId" placeholder="ルームIDを入力">
+            </div>
+            
+            <div>
+                <button onclick="createRoom()">新しいルームを作成</button>
+                <button onclick="joinRoom()">ルームに参加</button>
+            </div>
+            
+            <div class="player-list">
+                <h3>接続中のプレイヤー</h3>
+                <div id="playerList">
+                    <div class="player-item">待機中...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- ゲーム画面 -->
+        <div class="game-container" id="gameContainer">
+            <div class="game-info">
+                <div>ルームID: <span id="currentRoomId">-</span></div>
+                <div>現在のプレイヤー: <span id="currentPlayerName">-</span></div>
+                <div>局: <span id="gameRound">-</span></div>
+                <div>残り牌: <span id="remainingTiles">-</span></div>
+            </div>
+            
+            <div class="game-board">
+                <!-- 北（上） -->
+                <div class="player-area player-north" id="player0">
+                    <div class="player-name">プレイヤー0</div>
+                    <div class="hand-tiles" id="hand0"></div>
+                </div>
+                
+                <!-- 東（右） -->
+                <div class="player-area player-east" id="player1">
+                    <div class="player-name">プレイヤー1</div>
+                    <div class="hand-tiles" id="hand1"></div>
+                </div>
+                
+                <!-- 南（下） -->
+                <div class="player-area player-south" id="player2">
+                    <div class="player-name">プレイヤー2</div>
+                    <div class="hand-tiles" id="hand2"></div>
+                </div>
+                
+                <!-- 西（左） -->
+                <div class="player-area player-west" id="player3">
+                    <div class="player-name">プレイヤー3</div>
+                    <div class="hand-tiles" id="hand3"></div>
+                </div>
+                
+                <!-- 中央エリア -->
+                <div class="center-area">
+                    <div>河（捨て牌）</div>
+                    <div id="discardPile" class="hand-tiles"></div>
+                    <div>ドラ表示牌: <span id="doraIndicator">-</span></div>
+                </div>
+            </div>
+            
+            <div class="action-buttons">
+                <button onclick="drawTile()" id="drawBtn">牌を引く</button>
+                <button onclick="discardSelected()" id="discardBtn">選択牌を捨てる</button>
+                <button onclick="callChi()" id="chiBtn">チー</button>
+                <button onclick="callPon()" id="ponBtn">ポン</button>
+                <button onclick="callKan()" id="kanBtn">カン</button>
+                <button onclick="callTsumo()" id="tsumoBtn">ツモ</button>
+                <button onclick="callRon()" id="ronBtn">ロン</button>
+                <button onclick="skipAction()" id="skipBtn">スキップ</button>
+            </div>
+            
+            <div>
+                <button onclick="leaveGame()">ゲームを離脱</button>
+                <button onclick="requestGameState()">状態を更新</button>
+            </div>
+            
+            <div class="message-log" id="messageLog"></div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        let socket = null;
+        let currentRoomId = null;
+        let currentPlayerId = null;
+        let selectedTile = null;
+        let gameState = null;
+        
+        // Socket.IO接続
+        function connectSocket() {
+            socket = io();
+            
+            socket.on('connect', () => {
+                updateConnectionStatus(true);
+                addMessage('サーバーに接続しました');
+            });
+            
+            socket.on('disconnect', () => {
+                updateConnectionStatus(false);
+                addMessage('サーバーから切断されました');
+            });
+            
+            // ルーム関連イベント
+            socket.on('roomCreated', (data) => {
+                currentRoomId = data.roomId;
+                gameState = data.gameState;
+                document.getElementById('currentRoomId').textContent = currentRoomId;
+                addMessage(`ルームを作成しました: ${currentRoomId}`);
+                showGameScreen();
+                updateGameDisplay();
+            });
+            
+            socket.on('roomJoined', (data) => {
+                currentRoomId = data.roomId;
+                gameState = data.gameState;
+                document.getElementById('currentRoomId').textContent = currentRoomId;
+                addMessage(`ルームに参加しました: ${currentRoomId}`);
+                showGameScreen();
+                updateGameDisplay();
+            });
+            
+            socket.on('roomError', (error) => {
+                addMessage(`ルームエラー: ${error.message}`);
+                alert(error.message);
+            });
+            
+            socket.on('playerJoined', (data) => {
+                addMessage(`${data.playerName} がルームに参加しました`);
+            });
+            
+            socket.on('playerLeft', (data) => {
+                addMessage(`プレイヤー ${data.playerId} がルームを離脱しました`);
+            });
+            
+            // ゲーム関連イベント
+            socket.on('gameUpdate', (newGameState) => {
+                gameState = newGameState;
+                updateGameDisplay();
+                addMessage('ゲーム状態が更新されました');
+            });
+            
+            socket.on('gameAction', (action) => {
+                addMessage(`プレイヤー${action.playerId} が ${action.type} を実行`);
+            });
+            
+            socket.on('actionResult', (result) => {
+                if (result.success) {
+                    addMessage(`アクション成功: ${result.message}`);
+                } else {
+                    addMessage(`アクション失敗: ${result.message}`);
+                }
+            });
+            
+            socket.on('error', (error) => {
+                addMessage(`エラー: ${error.message}`);
+                console.error('Socket error:', error);
+            });
+            
+            socket.on('pong', (data) => {
+                addMessage(`Pong受信: ${data.timestamp}`);
+            });
+        }
+        
+        // 接続状態の更新
+        function updateConnectionStatus(connected) {
+            const status = document.getElementById('connectionStatus');
+            if (connected) {
+                status.textContent = '🟢 接続済み';
+                status.className = 'connection-status connected';
+            } else {
+                status.textContent = '🔴 未接続';
+                status.className = 'connection-status disconnected';
+            }
+        }
+        
+        // メッセージログに追加
+        function addMessage(message) {
+            const log = document.getElementById('messageLog');
+            const timestamp = new Date().toLocaleTimeString();
+            log.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        // ルーム作成
+        function createRoom() {
+            const playerName = document.getElementById('playerName').value.trim();
+            if (!playerName) {
+                alert('プレイヤー名を入力してください');
+                return;
+            }
+            
+            currentPlayerId = 'player_' + Date.now();
+            
+            socket.emit('createRoom', {
+                playerId: currentPlayerId,
+                playerName: playerName,
+                settings: {
+                    maxPlayers: 4,
+                    gameType: 'standard'
+                }
+            });
+            
+            addMessage('ルーム作成中...');
+        }
+        
+        // ルーム参加
+        function joinRoom() {
+            const playerName = document.getElementById('playerName').value.trim();
+            const roomId = document.getElementById('roomId').value.trim();
+            
+            if (!playerName) {
+                alert('プレイヤー名を入力してください');
+                return;
+            }
+            
+            if (!roomId) {
+                alert('ルームIDを入力してください');
+                return;
+            }
+            
+            currentPlayerId = 'player_' + Date.now();
+            
+            socket.emit('joinRoom', {
+                roomId: roomId,
+                playerId: currentPlayerId,
+                playerName: playerName
+            });
+            
+            addMessage('ルーム参加中...');
+        }
+        
+        // ゲーム画面表示
+        function showGameScreen() {
+            document.getElementById('lobby').style.display = 'none';
+            document.getElementById('gameContainer').style.display = 'block';
+        }
+        
+        // ロビー画面表示
+        function showLobby() {
+            document.getElementById('lobby').style.display = 'block';
+            document.getElementById('gameContainer').style.display = 'none';
+        }
+        
+        // ゲーム離脱
+        function leaveGame() {
+            if (currentRoomId && currentPlayerId) {
+                socket.emit('leaveRoom', {
+                    roomId: currentRoomId,
+                    playerId: currentPlayerId
+                });
+            }
+            
+            currentRoomId = null;
+            currentPlayerId = null;
+            gameState = null;
+            selectedTile = null;
+            
+            showLobby();
+            addMessage('ゲームを離脱しました');
+        }
+        
+        // ゲーム状態要求
+        function requestGameState() {
+            if (socket && currentRoomId) {
+                socket.emit('requestGameState');
+                addMessage('ゲーム状態を要求しました');
+            }
+        }
+        
+        // ゲーム表示更新
+        function updateGameDisplay() {
+            if (!gameState) return;
+            
+            // 基本情報の更新
+            document.getElementById('currentPlayerName').textContent = 
+                gameState.players[gameState.currentPlayer]?.name || '-';
+            document.getElementById('gameRound').textContent = 
+                `${gameState.round}局 ${gameState.honba}本場`;
+            document.getElementById('remainingTiles').textContent = gameState.remainingTiles;
+            document.getElementById('doraIndicator').textContent = 
+                gameState.doraIndicator || '-';
+            
+            // プレイヤーの手牌表示
+            gameState.players.forEach((player, index) => {
+                const playerElement = document.getElementById(`player${index}`);
+                const handElement = document.getElementById(`hand${index}`);
+                
+                if (playerElement && handElement) {
+                    // プレイヤー名更新
+                    const nameElement = playerElement.querySelector('.player-name');
+                    if (nameElement) {
+                        nameElement.textContent = `${player.name} (${player.wind})`;
+                    }
+                    
+                    // 現在のプレイヤーをハイライト
+                    if (index === gameState.currentPlayer) {
+                        playerElement.classList.add('current-player');
+                    } else {
+                        playerElement.classList.remove('current-player');
+                    }
+                    
+                    // 手牌表示
+                    handElement.innerHTML = '';
+                    player.hand.forEach((tile, tileIndex) => {
+                        const tileElement = document.createElement('div');
+                        tileElement.className = 'tile';
+                        tileElement.textContent = tile.display;
+                        tileElement.onclick = () => selectTile(index, tileIndex, tile);
+                        handElement.appendChild(tileElement);
+                    });
+                }
+            });
+            
+            // 捨て牌表示
+            const discardElement = document.getElementById('discardPile');
+            if (discardElement && gameState.discardPile) {
+                discardElement.innerHTML = '';
+                gameState.discardPile.forEach(tile => {
+                    const tileElement = document.createElement('div');
+                    tileElement.className = 'tile';
+                    tileElement.textContent = tile.display;
+                    discardElement.appendChild(tileElement);
+                });
+            }
+        }
+        
+        // 牌選択
+        function selectTile(playerIndex, tileIndex, tile) {
+            // 選択状態をクリア
+            document.querySelectorAll('.tile.selected').forEach(el => {
+                el.classList.remove('selected');
+            });
+            
+            // 新しい牌を選択
+            event.target.classList.add('selected');
+            selectedTile = { playerIndex, tileIndex, tile };
+        }
+        
+        // プレイヤーアクション送信
+        function sendPlayerAction(action) {
+            if (!socket || !currentRoomId) {
+                addMessage('ゲームに参加していません');
+                return;
+            }
+            
+            socket.emit('playerAction', action);
+        }
+        
+        // 牌を引く
+        function drawTile() {
+            sendPlayerAction({
+                type: 'draw',
+                playerId: currentPlayerId,
+                data: {}
+            });
+        }
+        
+        // 選択牌を捨てる
+        function discardSelected() {
+            if (!selectedTile) {
+                addMessage('捨てる牌を選択してください');
+                return;
+            }
+            
+            sendPlayerAction({
+                type: 'discard',
+                playerId: currentPlayerId,
+                data: { tile: selectedTile.tile }
+            });
+            
+            selectedTile = null;
+            document.querySelectorAll('.tile.selected').forEach(el => {
+                el.classList.remove('selected');
+            });
+        }
+        
+        // 鳴きアクション
+        function callChi() {
+            sendPlayerAction({
+                type: 'chi',
+                playerId: currentPlayerId,
+                data: {}
+            });
+        }
+        
+        function callPon() {
+            sendPlayerAction({
+                type: 'pon',
+                playerId: currentPlayerId,
+                data: {}
+            });
+        }
+        
+        function callKan() {
+            sendPlayerAction({
+                type: 'kan',
+                playerId: currentPlayerId,
+                data: {}
+            });
+        }
+        
+        function callTsumo() {
+            sendPlayerAction({
+                type: 'tsumo',
+                playerId: currentPlayerId,
+                data: {}
+            });
+        }
+        
+        function callRon() {
+            sendPlayerAction({
+                type: 'ron',
+                playerId: currentPlayerId,
+                data: {}
+            });
+        }
+        
+        function skipAction() {
+            sendPlayerAction({
+                type: 'skip',
+                playerId: currentPlayerId,
+                data: {}
+            });
+        }
+        
+        // 初期化
+        document.addEventListener('DOMContentLoaded', () => {
+            connectSocket();
+            addMessage('麻雀ゲームを開始しました');
+        });
+        
+        // テスト用
+        function testPing() {
+            if (socket) {
+                socket.emit('ping');
+                addMessage('Ping送信');
+            }
+        }
+    </script>
+</body>
+</html>

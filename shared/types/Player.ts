@@ -1,6 +1,9 @@
 import { Hand, Meld } from './Hand';
 import { Tile } from './Tile';
 
+// 再エクスポート（他のモジュールから利用可能にする）
+export { Meld } from './Hand';
+
 // プレイヤーの状態
 export type PlayerStatus = 'waiting' | 'playing' | 'riichi' | 'finished';
 

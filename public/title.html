@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🀄 麻雀ゲーム</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #0f5132;
+            --secondary: #20c997;
+            --accent: #ffc107;
+            --danger: #dc3545;
+            --success: #198754;
+            --info: #0dcaf0;
+            --dark: #212529;
+            --light: #f8f9fa;
+            --gold: #ffd700;
+            --shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            --border-radius: 20px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background: linear-gradient(135deg, var(--primary) 0%, #1a4d3a 25%, #2d5a41 50%, #3d6b51 75%, var(--secondary) 100%);
+            min-height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* 背景アニメーション */
+        .background-animation {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .floating-tile {
+            position: absolute;
+            font-size: 2rem;
+            opacity: 0.1;
+            animation: float 15s infinite linear;
+            color: white;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translateY(100vh) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.1;
+            }
+            90% {
+                opacity: 0.1;
+            }
+            100% {
+                transform: translateY(-100px) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        /* メインコンテナ */
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 2rem;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* タイトルセクション */
+        .title-section {
+            text-align: center;
+            margin-bottom: 4rem;
+            animation: titleEnter 2s ease-out;
+        }
+
+        @keyframes titleEnter {
+            0% {
+                opacity: 0;
+                transform: translateY(-50px) scale(0.8);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .main-title {
+            font-size: 5rem;
+            font-weight: 900;
+            color: var(--gold);
+            text-shadow: 
+                0 0 10px rgba(255, 215, 0, 0.5),
+                0 0 20px rgba(255, 215, 0, 0.3),
+                0 0 30px rgba(255, 215, 0, 0.2),
+                2px 2px 10px rgba(0, 0, 0, 0.5);
+            margin-bottom: 1rem;
+            letter-spacing: 0.1em;
+            animation: glow 3s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from {
+                text-shadow: 
+                    0 0 10px rgba(255, 215, 0, 0.5),
+                    0 0 20px rgba(255, 215, 0, 0.3),
+                    0 0 30px rgba(255, 215, 0, 0.2),
+                    2px 2px 10px rgba(0, 0, 0, 0.5);
+            }
+            to {
+                text-shadow: 
+                    0 0 20px rgba(255, 215, 0, 0.8),
+                    0 0 30px rgba(255, 215, 0, 0.6),
+                    0 0 40px rgba(255, 215, 0, 0.4),
+                    2px 2px 15px rgba(0, 0, 0, 0.7);
+            }
+        }
+
+        .subtitle {
+            font-size: 1.5rem;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 300;
+            margin-bottom: 2rem;
+            letter-spacing: 0.05em;
+        }
+
+        .version {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 400;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* ゲームモード選択 */
+        .game-modes {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            max-width: 1200px;
+            width: 100%;
+            animation: modesEnter 2s ease-out 0.5s both;
+        }
+
+        @keyframes modesEnter {
+            0% {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .mode-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: var(--border-radius);
+            padding: 2.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            transform: perspective(1000px) rotateX(0deg);
+        }
+
+        .mode-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.6s;
+        }
+
+        .mode-card:hover::before {
+            left: 100%;
+        }
+
+        .mode-card:hover {
+            transform: perspective(1000px) rotateX(5deg) translateY(-10px);
+            border-color: var(--gold);
+            box-shadow: 
+                0 20px 60px rgba(255, 215, 0, 0.3),
+                0 10px 30px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+
+        .mode-card.featured {
+            border-color: var(--gold);
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        .mode-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            display: block;
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+            animation: iconFloat 4s ease-in-out infinite;
+        }
+
+        @keyframes iconFloat {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .mode-title {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: white;
+            margin-bottom: 1rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .mode-description {
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.6;
+            margin-bottom: 1.5rem;
+        }
+
+        .mode-features {
+            list-style: none;
+            text-align: left;
+            margin-bottom: 2rem;
+        }
+
+        .mode-features li {
+            color: rgba(255, 255, 255, 0.7);
+            padding: 0.3rem 0;
+            position: relative;
+            padding-left: 1.5rem;
+        }
+
+        .mode-features li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: var(--gold);
+            font-weight: bold;
+        }
+
+        .mode-button {
+            background: linear-gradient(135deg, var(--gold), #ffed4e);
+            color: var(--dark);
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            box-shadow: 0 4px 15px rgba(255, 215, 0, 0.4);
+        }
+
+        .mode-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(255, 215, 0, 0.6);
+            background: linear-gradient(135deg, #ffed4e, var(--gold));
+        }
+
+        .mode-button:active {
+            transform: translateY(0);
+        }
+
+        /* 底部ナビゲーション */
+        .bottom-nav {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 1rem;
+            z-index: 100;
+            animation: navEnter 2s ease-out 1s both;
+        }
+
+        @keyframes navEnter {
+            0% {
+                opacity: 0;
+                transform: translateX(-50%) translateY(50px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: 500;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: var(--gold);
+            color: var(--gold);
+            transform: translateY(-2px);
+        }
+
+        /* パーティクルエフェクト */
+        .particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            background: var(--gold);
+            border-radius: 50%;
+            animation: particle 10s infinite linear;
+            opacity: 0.6;
+        }
+
+        @keyframes particle {
+            0% {
+                transform: translateY(100vh) translateX(0) scale(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 0.6;
+            }
+            90% {
+                opacity: 0.6;
+            }
+            100% {
+                transform: translateY(-100px) translateX(100px) scale(1);
+                opacity: 0;
+            }
+        }
+
+        /* レスポンシブ */
+        @media (max-width: 768px) {
+            .main-title {
+                font-size: 3rem;
+            }
+
+            .subtitle {
+                font-size: 1.2rem;
+            }
+
+            .game-modes {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            .mode-card {
+                padding: 2rem;
+            }
+
+            .mode-icon {
+                font-size: 3rem;
+            }
+
+            .mode-title {
+                font-size: 1.5rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .main-container {
+                padding: 1rem;
+            }
+
+            .main-title {
+                font-size: 2.5rem;
+            }
+
+            .mode-card {
+                padding: 1.5rem;
+            }
+        }
+
+        /* ローディング */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .loading-content {
+            text-align: center;
+            color: white;
+        }
+
+        .spinner {
+            width: 80px;
+            height: 80px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--gold);
+            animation: spin 1s linear infinite;
+            margin: 0 auto 2rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- 背景アニメーション -->
+    <div class="background-animation" id="bgAnimation"></div>
+    
+    <!-- パーティクル -->
+    <div class="particles" id="particles"></div>
+
+    <!-- メインコンテナ -->
+    <div class="main-container">
+        <!-- タイトルセクション -->
+        <div class="title-section">
+            <h1 class="main-title">🀄 麻雀</h1>
+            <p class="subtitle">オンライン対戦麻雀ゲーム</p>
+            <div class="version">Version 2.0 - Complete Edition</div>
+        </div>
+
+        <!-- ゲームモード選択 -->
+        <div class="game-modes">
+            <div class="mode-card featured" onclick="selectMode('multiplayer')">
+                <div class="mode-icon">👥</div>
+                <h2 class="mode-title">マルチプレイヤー</h2>
+                <p class="mode-description">
+                    世界中のプレイヤーとリアルタイムで対戦。本格的なオンライン麻雀体験をお楽しみください。
+                </p>
+                <ul class="mode-features">
+                    <li>リアルタイム対戦</li>
+                    <li>ルーム作成・参加</li>
+                    <li>チャット機能</li>
+                    <li>統計記録</li>
+                </ul>
+                <button class="mode-button">オンライン対戦</button>
+            </div>
+
+            <div class="mode-card" onclick="selectMode('ai')">
+                <div class="mode-icon">🤖</div>
+                <h2 class="mode-title">AI対戦</h2>
+                <p class="mode-description">
+                    高度なAIエンジンと対戦。初心者から上級者まで、自分のペースで練習できます。
+                </p>
+                <ul class="mode-features">
+                    <li>高度なAI戦略</li>
+                    <li>レベル調整</li>
+                    <li>デバッグモード</li>
+                    <li>練習に最適</li>
+                </ul>
+                <button class="mode-button">AI対戦</button>
+            </div>
+
+            <div class="mode-card" onclick="selectMode('tutorial')">
+                <div class="mode-icon">🎓</div>
+                <h2 class="mode-title">チュートリアル</h2>
+                <p class="mode-description">
+                    麻雀の基本ルールから高度な戦術まで、段階的に学習できるインタラクティブなガイド。
+                </p>
+                <ul class="mode-features">
+                    <li>基本ルール解説</li>
+                    <li>役の覚え方</li>
+                    <li>戦術講座</li>
+                    <li>練習問題</li>
+                </ul>
+                <button class="mode-button">学習する</button>
+            </div>
+
+            <div class="mode-card" onclick="selectMode('stats')">
+                <div class="mode-icon">📊</div>
+                <h2 class="mode-title">統計・記録</h2>
+                <p class="mode-description">
+                    ゲーム成績の確認、プレイヤーランキング、詳細な統計データで上達をサポート。
+                </p>
+                <ul class="mode-features">
+                    <li>ゲーム成績</li>
+                    <li>ランキング</li>
+                    <li>ゲーム履歴</li>
+                    <li>実績システム</li>
+                </ul>
+                <button class="mode-button">統計を見る</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 底部ナビゲーション -->
+    <div class="bottom-nav">
+        <a href="#" class="nav-btn" onclick="showSettings()">⚙️ 設定</a>
+        <a href="#" class="nav-btn" onclick="showHelp()">❓ ヘルプ</a>
+        <a href="#" class="nav-btn" onclick="showAbout()">ℹ️ アバウト</a>
+    </div>
+
+    <!-- ローディング -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <h3>ゲームを開始しています...</h3>
+            <p>しばらくお待ちください</p>
+        </div>
+    </div>
+
+    <script>
+        // 背景アニメーション
+        function createFloatingTiles() {
+            const bgAnimation = document.getElementById('bgAnimation');
+            const tiles = ['🀀', '🀁', '🀂', '🀃', '🀆', '🀅', '🀄', '🀇', '🀈', '🀉', '🀊', '🀋', '🀌', '🀍', '🀎', '🀏'];
+            
+            setInterval(() => {
+                const tile = document.createElement('div');
+                tile.className = 'floating-tile';
+                tile.textContent = tiles[Math.floor(Math.random() * tiles.length)];
+                tile.style.left = Math.random() * 100 + '%';
+                tile.style.animationDuration = (Math.random() * 10 + 10) + 's';
+                tile.style.fontSize = (Math.random() * 2 + 1) + 'rem';
+                
+                bgAnimation.appendChild(tile);
+                
+                setTimeout(() => {
+                    tile.remove();
+                }, 20000);
+            }, 2000);
+        }
+
+        // パーティクルエフェクト
+        function createParticles() {
+            const particles = document.getElementById('particles');
+            
+            setInterval(() => {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.width = particle.style.height = Math.random() * 4 + 2 + 'px';
+                particle.style.animationDuration = (Math.random() * 5 + 5) + 's';
+                particle.style.animationDelay = Math.random() * 2 + 's';
+                
+                particles.appendChild(particle);
+                
+                setTimeout(() => {
+                    particle.remove();
+                }, 12000);
+            }, 300);
+        }
+
+        // ゲームモード選択
+        function selectMode(mode) {
+            showLoading();
+            
+            const routes = {
+                'multiplayer': '/multiplayer-new.html',
+                'ai': '/game-new.html',
+                'tutorial': '#tutorial',
+                'stats': '/stats.html'
+            };
+            
+            const messages = {
+                'multiplayer': 'マルチプレイヤーモードを起動しています...',
+                'ai': 'AI対戦モードを起動しています...',
+                'tutorial': 'チュートリアルを準備しています...',
+                'stats': '統計データを読み込んでいます...'
+            };
+            
+            // ローディングメッセージを更新
+            document.querySelector('.loading-content h3').textContent = messages[mode];
+            
+            setTimeout(() => {
+                if (mode === 'tutorial') {
+                    hideLoading();
+                    alert('チュートリアルは開発中です。\nAI対戦モードで基本操作を学ぶことができます。');
+                } else {
+                    window.location.href = routes[mode];
+                }
+            }, 1500);
+        }
+
+        // ローディング表示
+        function showLoading() {
+            document.getElementById('loadingOverlay').classList.add('show');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.remove('show');
+        }
+
+        // 設定画面
+        function showSettings() {
+            alert('設定機能は開発中です。\n将来のアップデートで追加予定です。');
+        }
+
+        // ヘルプ画面
+        function showHelp() {
+            const helpText = `
+🀄 麻雀ゲーム - ヘルプ
+
+【基本操作】
+• マウスクリック: 牌選択・操作
+• キーボード: D(ツモ), S(打牌), A(AI実行)
+
+【ゲームモード】
+• マルチプレイヤー: オンライン対戦
+• AI対戦: コンピューター相手に練習
+• 統計: 成績確認・ランキング
+
+【役について】
+基本役から役満まで実装済み。
+詳細は各ゲームモードで確認できます。
+
+【サポート】
+問題が発生した場合は、ページをリロードしてください。
+            `;
+            alert(helpText);
+        }
+
+        // アバウト画面
+        function showAbout() {
+            const aboutText = `
+🀄 麻雀ゲーム v2.0
+Complete Edition
+
+【開発】
+• TypeScript + Node.js
+• Socket.IO リアルタイム通信
+• 高度AI戦略エンジン
+• 包括的統計システム
+
+【機能】
+• 4人打ち麻雀
+• 赤ドラ対応
+• 全役実装
+• リアルタイム対戦
+• 詳細統計・ランキング
+• 実績システム
+
+【技術仕様】
+• モダンWebテクノロジー
+• レスポンシブデザイン
+• PWA対応予定
+
+© 2024 麻雀ゲーム
+高品質なオンライン麻雀体験
+            `;
+            alert(aboutText);
+        }
+
+        // カードホバーエフェクト
+        document.querySelectorAll('.mode-card').forEach(card => {
+            card.addEventListener('mouseenter', function() {
+                this.style.transform = 'perspective(1000px) rotateX(5deg) translateY(-10px)';
+            });
+            
+            card.addEventListener('mouseleave', function() {
+                this.style.transform = 'perspective(1000px) rotateX(0deg) translateY(0)';
+            });
+        });
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            createFloatingTiles();
+            createParticles();
+            
+            // タイトルクリックでエフェクト
+            document.querySelector('.main-title').addEventListener('click', function() {
+                this.style.animation = 'none';
+                setTimeout(() => {
+                    this.style.animation = 'glow 3s ease-in-out infinite alternate';
+                }, 10);
+            });
+
+            // キーボードショートカット
+            document.addEventListener('keydown', function(e) {
+                switch(e.key) {
+                    case '1':
+                        selectMode('multiplayer');
+                        break;
+                    case '2':
+                        selectMode('ai');
+                        break;
+                    case '3':
+                        selectMode('tutorial');
+                        break;
+                    case '4':
+                        selectMode('stats');
+                        break;
+                    case 'Escape':
+                        hideLoading();
+                        break;
+                }
+            });
+
+            // モバイル対応
+            if ('ontouchstart' in window) {
+                document.querySelectorAll('.mode-card').forEach(card => {
+                    card.addEventListener('touchstart', function() {
+                        this.style.transform = 'perspective(1000px) rotateX(5deg) translateY(-10px)';
+                    });
+                    
+                    card.addEventListener('touchend', function() {
+                        setTimeout(() => {
+                            this.style.transform = 'perspective(1000px) rotateX(0deg) translateY(0)';
+                        }, 200);
+                    });
+                });
+            }
+
+            console.log('🀄 麻雀ゲーム タイトル画面 初期化完了');
+        });
+
+        // パフォーマンス最適化
+        let rafId;
+        function optimizeAnimations() {
+            const particles = document.querySelectorAll('.particle');
+            const tiles = document.querySelectorAll('.floating-tile');
+            
+            if (particles.length > 50) {
+                particles[0].remove();
+            }
+            
+            if (tiles.length > 20) {
+                tiles[0].remove();
+            }
+            
+            rafId = requestAnimationFrame(optimizeAnimations);
+        }
+        
+        requestAnimationFrame(optimizeAnimations);
+
+        // ページ離脱時のクリーンアップ
+        window.addEventListener('beforeunload', function() {
+            if (rafId) {
+                cancelAnimationFrame(rafId);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -5,13 +5,16 @@ import { TileManager } from './TileManager';
 import { Player } from './Player';
 import { HandAnalyzer } from '../utils/HandAnalyzer';
 import { MahjongAI } from '../ai/MahjongAI';
+import { GameRecordManager } from './GameRecord';
 
 export class GameManager {
+  public readonly gameId: string;
   private gameState: GameState;
   private tileManager: TileManager;
   private players: Player[] = [];
   private actionQueue: PlayerAction[] = [];
   private debugMode: boolean = false;
+  private recordManager: GameRecordManager;
 
   constructor(
     gameId: string,
@@ -27,6 +30,9 @@ export class GameManager {
       nagashiMangan: false,
     }
   ) {
+    this.gameId = gameId;
+    this.recordManager = GameRecordManager.getInstance();
+    
     if (playerNames.length !== 4) {
       throw new Error('Game requires exactly 4 players');
     }
@@ -141,6 +147,13 @@ export class GameManager {
       description: `配牌完了。東${this.gameState.round.roundNumber}局開始`,
       timestamp: Date.now(),
     });
+
+    // ゲーム記録開始
+    this.recordManager.startGameRecord(
+      this.gameId, 
+      this.players.map(p => this.playerToInterface(p)), 
+      'ai' // デフォルトはAI対戦
+    );
 
     console.log(`🎯 ${this.players[this.gameState.currentPlayer].name}のターン`);
   }
@@ -646,5 +659,97 @@ export class GameManager {
       debugMode: this.debugMode,
       players: this.players.map(p => p.getDebugInfo()),
     };
+  }
+
+  // ゲーム終了処理
+  finishGame(winner?: number): void {
+    this.gameState = {
+      ...this.gameState,
+      phase: 'finished',
+      updatedAt: Date.now(),
+    };
+
+    // 最終得点を取得
+    const finalScores = this.players.map(p => p.score);
+    
+    // 勝者を決定（得点が最も高いプレイヤー）
+    if (winner === undefined) {
+      const maxScore = Math.max(...finalScores);
+      winner = finalScores.indexOf(maxScore);
+    }
+
+    // ゲーム記録を完了
+    this.recordManager.finishGameRecord(this.gameId, finalScores, winner);
+
+    console.log(`🏆 ゲーム終了: 勝者は${this.players[winner].name} (${finalScores[winner]}点)`);
+  }
+
+  // 局終了処理
+  finishRound(winner?: number, winType?: 'tsumo' | 'ron'): void {
+    const roundData = {
+      roundNumber: this.gameState.round.roundNumber,
+      honba: this.gameState.round.honbaCount,
+      dealer: this.gameState.round.dealerPosition,
+      winner,
+      winType,
+      scoreChanges: this.players.map(p => p.score),
+      duration: Math.floor((Date.now() - this.gameState.createdAt) / 1000),
+      totalTurns: this.gameState.gameLog.length,
+    };
+
+    // 局記録を保存
+    this.recordManager.recordRound(this.gameId, roundData);
+
+    // 東4局終了でゲーム終了
+    if (this.gameState.round.roundNumber >= 4) {
+      this.finishGame();
+    } else {
+      // 次の局へ
+      this.nextRound();
+    }
+  }
+
+  // 次の局へ
+  private nextRound(): void {
+    this.gameState = {
+      ...this.gameState,
+      round: {
+        roundNumber: this.gameState.round.roundNumber + 1,
+        honbaCount: 0,
+        riichiSticks: 0,
+        dealerPosition: (this.gameState.round.dealerPosition + 1) % 4,
+        prevailingWind: 'east',
+      },
+      currentPlayer: (this.gameState.round.dealerPosition + 1) % 4,
+      updatedAt: Date.now(),
+    };
+
+    // 新しい局を開始
+    this.startNewRound();
+  }
+
+  // 新しい局の開始
+  private startNewRound(): void {
+    // 牌を初期化
+    this.tileManager = new TileManager(true);
+    
+    // プレイヤーをリセット
+    this.players.forEach(player => {
+      // 手牌のクリアなど（実装は省略）
+    });
+
+    // 配牌
+    const hands = this.tileManager.dealInitialHands();
+    hands.forEach((hand, index) => {
+      this.players[index].setInitialHand([...hand.tiles]);
+    });
+
+    // 親にツモ牌
+    const dealerTile = this.tileManager.drawTile();
+    if (dealerTile) {
+      this.players[this.gameState.round.dealerPosition].drawTile(dealerTile);
+    }
+
+    console.log(`🀄 東${this.gameState.round.roundNumber}局開始`);
   }
 }

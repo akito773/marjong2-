@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🀄 麻雀ゲーム</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --table-green: #0f5132;
+            --tile-bg: #f8f9fa;
+            --tile-border: #dee2e6;
+            --player-bg: rgba(255, 255, 255, 0.95);
+            --action-btn: #0d6efd;
+            --danger-btn: #dc3545;
+            --success-btn: #198754;
+            --warning-btn: #fd7e14;
+            --info-btn: #0dcaf0;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            --border-radius: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+            background: linear-gradient(135deg, #0f5132 0%, #198754 50%, #20c997 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background: 
+                radial-gradient(circle at 30% 70%, rgba(32, 201, 151, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 70% 30%, rgba(25, 135, 84, 0.3) 0%, transparent 50%),
+                var(--table-green);
+        }
+
+        /* ヘッダー */
+        .game-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            padding: 1rem;
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .game-title {
+            color: #ffc107;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .game-controls {
+            display: flex;
+            gap: 1rem;
+        }
+
+        /* メイン麻雀台 */
+        .mahjong-table {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80vmin;
+            height: 80vmin;
+            max-width: 800px;
+            max-height: 800px;
+            border-radius: 20px;
+            background: 
+                linear-gradient(45deg, #0f5132 25%, transparent 25%), 
+                linear-gradient(-45deg, #0f5132 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #0f5132 75%), 
+                linear-gradient(-45deg, transparent 75%, #0f5132 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            border: 8px solid #2d5016;
+            box-shadow: 
+                0 0 0 4px #ffc107,
+                var(--shadow),
+                inset 0 0 50px rgba(0, 0, 0, 0.2);
+            display: grid;
+            grid-template-areas: 
+                ". north ."
+                "west center east"
+                ". south .";
+            grid-template-columns: 1fr 2fr 1fr;
+            grid-template-rows: 1fr 2fr 1fr;
+            gap: 20px;
+            padding: 30px;
+        }
+
+        /* プレイヤーエリア */
+        .player-area {
+            background: var(--player-bg);
+            border-radius: var(--border-radius);
+            padding: 15px;
+            box-shadow: var(--shadow);
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .player-area.current {
+            border-color: #ffc107;
+            box-shadow: 0 0 20px rgba(255, 193, 7, 0.5), var(--shadow);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(255, 193, 7, 0.5), var(--shadow); }
+            50% { box-shadow: 0 0 30px rgba(255, 193, 7, 0.8), var(--shadow); }
+        }
+
+        .player-north { grid-area: north; }
+        .player-east { grid-area: east; }
+        .player-south { grid-area: south; }
+        .player-west { grid-area: west; }
+
+        .player-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 10px;
+            width: 100%;
+        }
+
+        .player-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #212529;
+            margin-bottom: 5px;
+        }
+
+        .player-score {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+
+        .player-wind {
+            background: linear-gradient(135deg, #ffc107, #fd7e14);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-top: 5px;
+        }
+
+        /* 手牌 */
+        .hand-tiles {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            justify-content: center;
+            min-height: 40px;
+        }
+
+        .tile {
+            background: var(--tile-bg);
+            border: 1px solid var(--tile-border);
+            border-radius: 4px;
+            padding: 4px 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 24px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .tile:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            background: #e9ecef;
+        }
+
+        .tile.selected {
+            background: #fff3cd;
+            border-color: #ffc107;
+            transform: translateY(-4px);
+            box-shadow: 0 6px 12px rgba(255, 193, 7, 0.3);
+        }
+
+        .tile.red {
+            color: #dc3545;
+            font-weight: 700;
+        }
+
+        /* 中央エリア */
+        .center-area {
+            grid-area: center;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-align: center;
+        }
+
+        .round-info {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #ffc107;
+        }
+
+        .dora-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .discard-pile {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            justify-content: center;
+            max-width: 200px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .discard-pile .tile {
+            font-size: 10px;
+            padding: 2px 4px;
+            min-width: 20px;
+        }
+
+        /* アクションボタン */
+        .action-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            box-shadow: var(--shadow);
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 90vw;
+            z-index: 50;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.9rem;
+            text-align: center;
+            min-width: 80px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-primary { background: var(--action-btn); color: white; }
+        .btn-danger { background: var(--danger-btn); color: white; }
+        .btn-success { background: var(--success-btn); color: white; }
+        .btn-warning { background: var(--warning-btn); color: white; }
+        .btn-info { background: var(--info-btn); color: white; }
+
+        /* 情報パネル */
+        .info-panel {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            width: 300px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            box-shadow: var(--shadow);
+            z-index: 50;
+        }
+
+        .game-status {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #212529;
+        }
+
+        .game-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #212529;
+        }
+
+        /* デバッグパネル */
+        .debug-panel {
+            position: fixed;
+            top: 80px;
+            left: 20px;
+            width: 250px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: var(--border-radius);
+            padding: 15px;
+            color: white;
+            font-size: 0.8rem;
+            z-index: 50;
+            max-height: 60vh;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .debug-panel.show {
+            display: block;
+        }
+
+        .debug-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #ffc107;
+        }
+
+        /* レスポンシブ */
+        @media (max-width: 768px) {
+            .mahjong-table {
+                width: 95vmin;
+                height: 95vmin;
+                padding: 15px;
+                gap: 10px;
+            }
+
+            .info-panel {
+                position: relative;
+                top: auto;
+                right: auto;
+                width: 100%;
+                margin: 20px;
+            }
+
+            .debug-panel {
+                position: relative;
+                top: auto;
+                left: auto;
+                width: 100%;
+                margin: 20px;
+                max-height: none;
+            }
+
+            .action-panel {
+                position: fixed;
+                bottom: 10px;
+                left: 10px;
+                right: 10px;
+                transform: none;
+                padding: 15px;
+            }
+
+            .tile {
+                font-size: 10px;
+                padding: 3px 5px;
+                min-width: 20px;
+            }
+        }
+
+        /* アニメーション */
+        @keyframes slideIn {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        /* 通知 */
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--success-btn);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            z-index: 1000;
+            font-weight: 500;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .notification.show {
+            opacity: 1;
+        }
+
+        .notification.error {
+            background: var(--danger-btn);
+        }
+
+        .notification.warning {
+            background: var(--warning-btn);
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <!-- ヘッダー -->
+        <header class="game-header">
+            <a href="/title.html" class="game-title" style="text-decoration: none; color: #ffc107;">🀄 麻雀ゲーム</a>
+            <div class="game-controls">
+                <button class="btn btn-info" onclick="toggleDebug()">デバッグ</button>
+                <button class="btn btn-warning" onclick="newGame()">新しいゲーム</button>
+                <a href="/title.html" class="btn btn-info">タイトル</a>
+            </div>
+        </header>
+
+        <!-- 麻雀台 -->
+        <div class="mahjong-table">
+            <!-- 北（上）プレイヤー -->
+            <div class="player-area player-north" id="player0">
+                <div class="player-info">
+                    <div class="player-name">プレイヤー0</div>
+                    <div class="player-score">25000点</div>
+                    <div class="player-wind">東</div>
+                </div>
+                <div class="hand-tiles" id="hand0"></div>
+            </div>
+
+            <!-- 東（右）プレイヤー -->
+            <div class="player-area player-east" id="player1">
+                <div class="player-info">
+                    <div class="player-name">プレイヤー1</div>
+                    <div class="player-score">25000点</div>
+                    <div class="player-wind">南</div>
+                </div>
+                <div class="hand-tiles" id="hand1"></div>
+            </div>
+
+            <!-- 南（下）プレイヤー -->
+            <div class="player-area player-south" id="player2">
+                <div class="player-info">
+                    <div class="player-name">プレイヤー2</div>
+                    <div class="player-score">25000点</div>
+                    <div class="player-wind">西</div>
+                </div>
+                <div class="hand-tiles" id="hand2"></div>
+            </div>
+
+            <!-- 西（左）プレイヤー -->
+            <div class="player-area player-west" id="player3">
+                <div class="player-info">
+                    <div class="player-name">プレイヤー3</div>
+                    <div class="player-score">25000点</div>
+                    <div class="player-wind">北</div>
+                </div>
+                <div class="hand-tiles" id="hand3"></div>
+            </div>
+
+            <!-- 中央エリア -->
+            <div class="center-area">
+                <div class="round-info" id="roundInfo">東1局</div>
+                <div class="dora-info">
+                    <div>ドラ表示牌</div>
+                    <div id="doraIndicator">🀫</div>
+                </div>
+                <div>捨て牌</div>
+                <div class="discard-pile" id="discardPile"></div>
+            </div>
+        </div>
+
+        <!-- 情報パネル -->
+        <div class="info-panel">
+            <div class="game-status" id="gameStatus">ゲーム開始</div>
+            <div class="game-stats">
+                <div class="stat-item">
+                    <div class="stat-label">現在プレイヤー</div>
+                    <div class="stat-value" id="currentPlayer">-</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">残り牌</div>
+                    <div class="stat-value" id="remainingTiles">-</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">局数</div>
+                    <div class="stat-value" id="round">-</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">本場</div>
+                    <div class="stat-value" id="honba">0</div>
+                </div>
+            </div>
+            <button class="btn btn-success" onclick="requestGameState()" style="width: 100%;">
+                状態を更新
+            </button>
+        </div>
+
+        <!-- デバッグパネル -->
+        <div class="debug-panel" id="debugPanel">
+            <div class="debug-title">デバッグ情報</div>
+            <div id="debugInfo">デバッグモードが無効です</div>
+        </div>
+
+        <!-- アクションパネル -->
+        <div class="action-panel">
+            <button class="btn btn-primary" onclick="drawTile()" id="drawBtn">ツモ</button>
+            <button class="btn btn-danger" onclick="discardSelected()" id="discardBtn">打牌</button>
+            <button class="btn btn-warning" onclick="callChi()" id="chiBtn">チー</button>
+            <button class="btn btn-warning" onclick="callPon()" id="ponBtn">ポン</button>
+            <button class="btn btn-warning" onclick="callKan()" id="kanBtn">カン</button>
+            <button class="btn btn-success" onclick="callTsumo()" id="tsumoBtn">ツモ</button>
+            <button class="btn btn-success" onclick="callRon()" id="ronBtn">ロン</button>
+            <button class="btn btn-info" onclick="executeAI()" id="aiBtn">AI実行</button>
+        </div>
+    </div>
+
+    <!-- 通知 -->
+    <div class="notification" id="notification"></div>
+
+    <script>
+        let gameId = null;
+        let selectedTile = null;
+        let gameState = null;
+        let debugMode = false;
+
+        // 初期化
+        document.addEventListener('DOMContentLoaded', function() {
+            newGame();
+        });
+
+        // 新しいゲーム開始
+        async function newGame() {
+            try {
+                showNotification('新しいゲームを作成中...', 'info');
+                
+                const response = await fetch('/api/game/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'OK') {
+                    gameId = result.data.gameId;
+                    gameState = result.data.gameState;
+                    updateGameDisplay();
+                    showNotification('ゲームが開始されました！', 'success');
+                } else {
+                    showNotification('ゲーム作成に失敗しました', 'error');
+                }
+            } catch (error) {
+                console.error('Game creation error:', error);
+                showNotification('エラーが発生しました', 'error');
+            }
+        }
+
+        // ゲーム状態を更新
+        async function requestGameState() {
+            if (!gameId) return;
+            
+            try {
+                const response = await fetch(`/api/game/${gameId}/state`);
+                const result = await response.json();
+                
+                if (result.status === 'OK') {
+                    gameState = result.data;
+                    updateGameDisplay();
+                    showNotification('状態を更新しました', 'success');
+                }
+            } catch (error) {
+                console.error('State update error:', error);
+                showNotification('状態更新に失敗しました', 'error');
+            }
+        }
+
+        // ゲーム表示を更新
+        function updateGameDisplay() {
+            if (!gameState) return;
+
+            // 基本情報更新
+            document.getElementById('currentPlayer').textContent = 
+                gameState.players[gameState.currentPlayer]?.name || '-';
+            document.getElementById('remainingTiles').textContent = gameState.remainingTiles;
+            document.getElementById('round').textContent = `${gameState.round}局`;
+            document.getElementById('honba').textContent = `${gameState.honba}本場`;
+            document.getElementById('roundInfo').textContent = `${gameState.round}局 ${gameState.honba}本場`;
+            document.getElementById('doraIndicator').textContent = gameState.doraIndicator || '🀫';
+
+            // プレイヤー情報更新
+            gameState.players.forEach((player, index) => {
+                const playerElement = document.getElementById(`player${index}`);
+                if (!playerElement) return;
+
+                // 現在のプレイヤーをハイライト
+                if (index === gameState.currentPlayer) {
+                    playerElement.classList.add('current');
+                } else {
+                    playerElement.classList.remove('current');
+                }
+
+                // プレイヤー情報更新
+                const nameElement = playerElement.querySelector('.player-name');
+                const scoreElement = playerElement.querySelector('.player-score');
+                const windElement = playerElement.querySelector('.player-wind');
+                
+                if (nameElement) nameElement.textContent = player.name;
+                if (scoreElement) scoreElement.textContent = `${player.score}点`;
+                if (windElement) windElement.textContent = player.wind;
+
+                // 手牌更新
+                const handElement = document.getElementById(`hand${index}`);
+                if (handElement) {
+                    handElement.innerHTML = '';
+                    player.hand.forEach((tile, tileIndex) => {
+                        const tileElement = document.createElement('div');
+                        tileElement.className = 'tile';
+                        if (tile.isRed) tileElement.classList.add('red');
+                        tileElement.textContent = tile.display || tile.unicode;
+                        tileElement.onclick = () => selectTile(index, tileIndex, tile);
+                        handElement.appendChild(tileElement);
+                    });
+                }
+            });
+
+            // 捨て牌更新
+            const discardElement = document.getElementById('discardPile');
+            if (discardElement && gameState.discardPile) {
+                discardElement.innerHTML = '';
+                gameState.discardPile.forEach(tile => {
+                    const tileElement = document.createElement('div');
+                    tileElement.className = 'tile';
+                    if (tile.isRed) tileElement.classList.add('red');
+                    tileElement.textContent = tile.display || tile.unicode;
+                    discardElement.appendChild(tileElement);
+                });
+            }
+
+            // ゲームステータス更新
+            updateGameStatus();
+        }
+
+        // ゲームステータス更新
+        function updateGameStatus() {
+            const statusElement = document.getElementById('gameStatus');
+            if (!gameState || !statusElement) return;
+
+            const currentPlayerName = gameState.players[gameState.currentPlayer]?.name;
+            statusElement.textContent = `${currentPlayerName}のターン`;
+        }
+
+        // 牌選択
+        function selectTile(playerIndex, tileIndex, tile) {
+            // 選択状態をクリア
+            document.querySelectorAll('.tile.selected').forEach(el => {
+                el.classList.remove('selected');
+            });
+
+            // 新しい牌を選択
+            event.target.classList.add('selected');
+            selectedTile = { playerIndex, tileIndex, tile };
+            
+            showNotification(`${tile.display || tile.unicode}を選択しました`, 'info');
+        }
+
+        // プレイヤーアクション
+        async function sendAction(actionType, data = {}) {
+            if (!gameId) {
+                showNotification('ゲームが開始されていません', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/game/${gameId}/action`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        type: actionType,
+                        playerId: `player_${gameState.currentPlayer}`,
+                        data: data
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.status === 'OK') {
+                    gameState = result.data.gameState;
+                    updateGameDisplay();
+                    showNotification(result.message, 'success');
+                } else {
+                    showNotification(result.message || 'アクション失敗', 'error');
+                }
+            } catch (error) {
+                console.error('Action error:', error);
+                showNotification('アクション送信に失敗しました', 'error');
+            }
+        }
+
+        // 個別アクション関数
+        function drawTile() {
+            sendAction('draw');
+        }
+
+        function discardSelected() {
+            if (!selectedTile) {
+                showNotification('捨てる牌を選択してください', 'warning');
+                return;
+            }
+            sendAction('discard', { tile: selectedTile.tile });
+            clearSelection();
+        }
+
+        function callChi() { sendAction('chi'); }
+        function callPon() { sendAction('pon'); }
+        function callKan() { sendAction('kan'); }
+        function callTsumo() { sendAction('tsumo'); }
+        function callRon() { sendAction('ron'); }
+
+        async function executeAI() {
+            if (!gameId) return;
+            
+            try {
+                const response = await fetch(`/api/game/${gameId}/ai`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === 'OK') {
+                    gameState = result.data.gameState;
+                    updateGameDisplay();
+                    showNotification('AI実行完了', 'success');
+                }
+            } catch (error) {
+                console.error('AI execution error:', error);
+                showNotification('AI実行に失敗しました', 'error');
+            }
+        }
+
+        // 選択解除
+        function clearSelection() {
+            document.querySelectorAll('.tile.selected').forEach(el => {
+                el.classList.remove('selected');
+            });
+            selectedTile = null;
+        }
+
+        // デバッグモード切り替え
+        function toggleDebug() {
+            debugMode = !debugMode;
+            const debugPanel = document.getElementById('debugPanel');
+            
+            if (debugMode) {
+                debugPanel.classList.add('show');
+                updateDebugInfo();
+                showNotification('デバッグモードON', 'info');
+            } else {
+                debugPanel.classList.remove('show');
+                showNotification('デバッグモードOFF', 'info');
+            }
+        }
+
+        // デバッグ情報更新
+        function updateDebugInfo() {
+            if (!debugMode || !gameState) return;
+            
+            const debugInfo = document.getElementById('debugInfo');
+            debugInfo.innerHTML = `
+                <div><strong>ゲームID:</strong> ${gameId}</div>
+                <div><strong>フェーズ:</strong> ${gameState.phase}</div>
+                <div><strong>現在プレイヤー:</strong> ${gameState.currentPlayer}</div>
+                <div><strong>局:</strong> ${gameState.round}局 ${gameState.honba}本場</div>
+                <div><strong>残り牌:</strong> ${gameState.remainingTiles}枚</div>
+                ${selectedTile ? `<div><strong>選択牌:</strong> ${selectedTile.tile.display}</div>` : ''}
+            `;
+        }
+
+        // 通知表示
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // キーボードショートカット
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'd' || e.key === 'D') drawTile();
+            if (e.key === 's' || e.key === 'S') discardSelected();
+            if (e.key === 'a' || e.key === 'A') executeAI();
+            if (e.key === 'r' || e.key === 'R') requestGameState();
+            if (e.key === 'n' || e.key === 'N') newGame();
+            if (e.key === 'q' || e.key === 'Q') toggleDebug();
+        });
+
+        // 自動更新（10秒ごと）
+        setInterval(() => {
+            if (gameId) {
+                requestGameState();
+            }
+        }, 10000);
+    </script>
+</body>
+</html>

@@ -17,16 +17,21 @@ export class GameSessionManager {
   }
 
   // 新しいゲームセッション作成
-  createGame(playerNames: string[], gameId?: string): string {
+  createGame(playerNames?: string[], gameId?: string): GameManager {
     const finalGameId = gameId || `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    const gameManager = new GameManager(finalGameId, playerNames);
+    // デフォルトプレイヤー名（マルチプレイヤー用）
+    const defaultPlayerNames = playerNames || [
+      'プレイヤー1', 'CPU東', 'CPU南', 'CPU西'
+    ];
+    
+    const gameManager = new GameManager(finalGameId, defaultPlayerNames);
     gameManager.startGame();
     
     this.activeSessions.set(finalGameId, gameManager);
     
     console.log(`🎮 新しいゲームセッション作成: ${finalGameId}`);
-    return finalGameId;
+    return gameManager;
   }
 
   // ゲームセッション取得
