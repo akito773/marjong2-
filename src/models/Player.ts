@@ -43,6 +43,19 @@ export class Player implements IPlayer {
     return { ...this._hand };
   }
 
+  // 総牌数カウント（デバッグ用）
+  getTotalTileCount(): number {
+    const handTiles = this._hand.tiles.length;
+    const meldTiles = this._hand.melds.reduce((sum, meld) => sum + meld.tiles.length, 0);
+    const discardTiles = this._hand.discards.length;
+    return handTiles + meldTiles + discardTiles;
+  }
+
+  // 手牌+メルドのみのカウント（プレイ中の保持牌数）
+  getActiveTileCount(): number {
+    return this._hand.tiles.length + this._hand.melds.reduce((sum, meld) => sum + meld.tiles.length, 0);
+  }
+
   get score(): number {
     return this._score;
   }
@@ -115,15 +128,62 @@ export class Player implements IPlayer {
 
   // 鳴き処理
   addMeld(meld: Meld, calledTile: Tile): void {
-    // 鳴いた牌を手牌から除去
-    const meldTiles = meld.tiles.filter(t => t.id !== calledTile.id);
-    let newTiles = [...this._hand.tiles];
+    const initialHandCount = this._hand.tiles.length;
+    console.log(`🔧 [${this.name}] Meld processing: initial hand = ${initialHandCount} tiles`);
+    console.log(`🔧 [${this.name}] Called tile: ${calledTile.displayName} (ID: ${calledTile.id})`);
+    console.log(`🔧 [${this.name}] Meld tiles:`, meld.tiles.map(t => `${t.displayName}(${t.id})`));
     
-    for (const meldTile of meldTiles) {
-      const index = newTiles.findIndex(t => t.id === meldTile.id);
-      if (index !== -1) {
-        newTiles.splice(index, 1);
+    // 鳴いた牌（相手から受け取る牌）以外を手牌から除去
+    // calledTileは手牌にないので、meld.tilesから手牌にある牌のみを削除
+    let newTiles = [...this._hand.tiles];
+    let removedCount = 0;
+    
+    // メルドの期待削除数を計算
+    const expectedRemoveCount = meld.type === 'kan' || meld.type === 'ankan' ? 
+      (meld.isConcealed ? 4 : 3) : 2;
+    
+    console.log(`🔧 [${this.name}] Expected to remove ${expectedRemoveCount} tiles from hand for ${meld.type}`);
+    
+    // 手牌から削除する牌を特定（calledTile以外）
+    const tilesToRemove = [];
+    for (const meldTile of meld.tiles) {
+      // calledTileではない、かつ手牌に存在する牌を探す
+      if (meldTile.id !== calledTile.id) {
+        const handIndex = newTiles.findIndex(t => t.id === meldTile.id);
+        if (handIndex !== -1) {
+          tilesToRemove.push({ tile: meldTile, index: handIndex });
+        } else {
+          // IDで見つからない場合、同じ牌を手牌から探す（フロントエンドの牌IDが異なる場合の対応）
+          const sameTypeIndex = newTiles.findIndex(t => this.tilesEqual(t, meldTile));
+          if (sameTypeIndex !== -1) {
+            tilesToRemove.push({ tile: newTiles[sameTypeIndex], index: sameTypeIndex });
+          }
+        }
       }
+    }
+    
+    // 必要な枚数が削除できない場合のエラーハンドリング
+    if (tilesToRemove.length < expectedRemoveCount) {
+      console.error(`🔧 [${this.name}] Cannot find enough tiles to remove for ${meld.type}`);
+      console.error(`🔧 [${this.name}] Found ${tilesToRemove.length}, expected ${expectedRemoveCount}`);
+      throw new Error(`Cannot find enough tiles in hand for ${meld.type}: found ${tilesToRemove.length}, expected ${expectedRemoveCount}`);
+    }
+    
+    // 手牌から牌を削除（インデックスの大きい順に削除）
+    tilesToRemove.sort((a, b) => b.index - a.index);
+    for (let i = 0; i < expectedRemoveCount; i++) {
+      const { tile, index } = tilesToRemove[i];
+      newTiles.splice(index, 1);
+      removedCount++;
+      console.log(`🔧 [${this.name}] Removed tile: ${tile.displayName || tile.unicode} (${i + 1}/${expectedRemoveCount})`);
+    }
+    
+    // 期待される手牌数を計算
+    const expectedHandSize = initialHandCount - expectedRemoveCount;
+    
+    if (newTiles.length !== expectedHandSize) {
+      console.error(`🔧 [${this.name}] Hand size mismatch: expected ${expectedHandSize}, got ${newTiles.length}`);
+      throw new Error(`Hand size error: expected ${expectedHandSize}, got ${newTiles.length} after ${meld.type}`);
     }
 
     this._hand = {
@@ -131,6 +191,9 @@ export class Player implements IPlayer {
       tiles: newTiles.sort(this.compareTiles),
       melds: [...this._hand.melds, meld],
     };
+    
+    console.log(`✅ [${this.name}] Meld complete: ${newTiles.length} hand tiles + ${this._hand.melds.length} melds`);
+    console.log(`✅ [${this.name}] Total tiles controlled: ${this.getTotalTileCount()}`);
   }
 
   // リーチ宣言
@@ -435,6 +498,37 @@ export class Player implements IPlayer {
 
     return 0;
   };
+
+  // 手牌クリア
+  clearHand(): void {
+    this._hand = {
+      tiles: [],
+      melds: [],
+      discards: [],
+      riichi: false,
+      doubleRiichi: false
+    };
+  }
+
+  // 手牌設定
+  setHand(hand: Hand): void {
+    this._hand = {
+      ...hand
+    };
+  }
+
+  // 点数加算
+  addScore(points: number): void {
+    this._score += points;
+    if (this._score < 0) this._score = 0; // 0点未満にはならない
+  }
+
+  // 位置・風・親フラグ更新
+  updatePosition(position: number, wind: 'east' | 'south' | 'west' | 'north', isDealer: boolean): void {
+    this._position = position;
+    this._wind = wind;
+    this._isDealer = isDealer;
+  }
 
   // デバッグ情報
   getDebugInfo(): {

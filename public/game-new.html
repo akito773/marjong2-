@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🀄 本格麻雀 v1.2.0</title>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
     <style>
         * {
             margin: 0;
@@ -17,7 +18,21 @@
             background: linear-gradient(135deg, #1a5f2f 0%, #0f4021 50%, #0a2d17 100%);
             color: #212529;
             height: 100vh;
-            overflow: hidden;
+            overflow: auto;
+        }
+        
+        /* デフォルト: 1920×1080対応 */
+        body {
+            min-width: 1920px;
+            min-height: 1080px;
+        }
+        
+        /* 2560×1440対応 */
+        @media (min-width: 2560px) and (min-height: 1440px) {
+            body {
+                min-width: 2560px;
+                min-height: 1440px;
+            }
         }
 
         /* ヘッダー */
@@ -55,17 +70,20 @@
             gap: 10px;
         }
 
-        /* メインゲームエリア */
+        /* レスポンシブメインゲームエリア */
         .mahjong-container {
-            height: 100vh;
-            padding-top: 60px;
+            width: 1920px;
+            height: 1080px;
+            padding-top: 80px;
             display: flex;
             flex-direction: column;
+            margin: 0 auto;
         }
 
-        /* ゲームボード（中央エリア） */
+        /* レスポンシブゲームボード（中央エリア） */
         .game-board {
-            flex: 1;
+            width: 1880px;
+            height: 980px;
             background: linear-gradient(135deg, #2d5a3d 0%, #1a4c2c 100%);
             border-radius: 20px;
             margin: 20px;
@@ -73,44 +91,83 @@
             border: 8px solid #8b4513;
             box-shadow: 0 0 0 4px #ffc107, 0 20px 40px rgba(0, 0, 0, 0.3);
         }
+        
+        /* 2K対応: 2560×1440 */
+        @media (min-width: 2560px) and (min-height: 1440px) {
+            .mahjong-container {
+                width: 2560px;
+                height: 1440px;
+                transform: scale(1.333); /* 1920→2560の比率 */
+                transform-origin: top center;
+            }
+            
+            .game-board {
+                width: 2520px;
+                height: 1320px;
+            }
+        }
 
-        /* プレイヤー配置 */
+        /* 2K対応プレイヤー配置 */
         .player-area {
             position: absolute;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 10px;
-            border: 2px solid transparent;
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 15px;
+            padding: 20px;
+            border: 3px solid transparent;
             transition: all 0.3s ease;
+            min-width: 280px;
         }
 
         .player-area.current {
             border-color: #ffc107;
-            box-shadow: 0 0 20px rgba(255, 193, 7, 0.5);
+            box-shadow: 0 0 30px rgba(255, 193, 7, 0.6);
         }
 
-        /* 上側プレイヤー（対面） */
+        /* レスポンシブ上側プレイヤー（対面） */
         .player-top {
-            top: 20px;
+            top: 30px;
             left: 50%;
             transform: translateX(-50%);
             text-align: center;
+            width: 280px;
         }
 
-        /* 右側プレイヤー */
+        /* レスポンシブ右側プレイヤー */
         .player-right {
-            right: 20px;
+            right: 30px;
             top: 50%;
             transform: translateY(-50%);
             text-align: center;
+            width: 240px;
         }
 
-        /* 左側プレイヤー */
+        /* レスポンシブ左側プレイヤー */
         .player-left {
-            left: 20px;
+            left: 30px;
             top: 50%;
             transform: translateY(-50%);
             text-align: center;
+            width: 240px;
+        }
+        
+        /* 2K対応: プレイヤーエリア */
+        @media (min-width: 2560px) and (min-height: 1440px) {
+            .player-top {
+                top: 40px;
+                width: 350px;
+            }
+            
+            .player-left, .player-right {
+                width: 300px;
+            }
+            
+            .player-left {
+                left: 40px;
+            }
+            
+            .player-right {
+                right: 40px;
+            }
         }
 
         /* プレイヤー情報 */
@@ -179,8 +236,8 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 400px;
-            height: 300px;
+            width: 800px;
+            height: 600px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -201,46 +258,94 @@
             border-radius: 6px;
         }
 
-        /* 上下の河（横向き6×3） */
+        /* レスポンシブ上下の河（横向き6×3） */
         .river-top, .river-bottom {
             grid-template-columns: repeat(6, 1fr);
             grid-template-rows: repeat(3, 1fr);
-            width: 150px;
-            height: 60px;
+            width: 240px;
+            height: 120px;
             margin: 0 auto;
         }
 
-        /* 左右の河（縦向き3×6） */
+        /* レスポンシブ左右の河（縦向き3×6） */
         .river-left, .river-right {
             grid-template-columns: repeat(3, 1fr);
             grid-template-rows: repeat(6, 1fr);
-            width: 60px;
-            height: 150px;
+            width: 100px;
+            height: 240px;
+        }
+        
+        /* 2K対応: 河エリア */
+        @media (min-width: 2560px) and (min-height: 1440px) {
+            .river-top, .river-bottom {
+                width: 300px;
+                height: 150px;
+            }
+            
+            .river-left, .river-right {
+                width: 120px;
+                height: 300px;
+            }
         }
 
-        /* 河の牌スタイル */
+        /* 2K対応河の牌スタイル */
         .river-tile {
             background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 2px;
+            border: 2px solid #dee2e6;
+            border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 8px;
+            font-size: 16px;
             font-weight: 600;
             cursor: default;
-            min-width: 18px;
-            min-height: 18px;
+            min-width: 40px;
+            min-height: 50px;
+            max-width: 40px;
+            max-height: 50px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
         }
 
         .river-tile.red {
             color: #dc3545;
+        }
+        
+        /* 鳴いた牌（チー・ポン・カンで呼ばれた牌）の表示 */
+        .river-tile.called {
+            background: #ffe6cc;
+            border-color: #ff9800;
+            border-width: 2px;
+            box-shadow: 0 0 4px rgba(255, 152, 0, 0.5);
         }
 
         .river-tile.reach {
             transform: rotate(90deg);
             background: #ffe6e6;
             border-color: #ff9999;
+        }
+
+        /* 2K対応各プレイヤーの河牌方向 */
+        .river-left .river-tile, 
+        .river-right .river-tile {
+            /* 南・北は横向き */
+            transform: rotate(0deg);
+            width: 50px;
+            height: 40px;
+            font-size: 14px;
+        }
+
+        .river-left .river-tile.reach, 
+        .river-right .river-tile.reach {
+            transform: rotate(90deg); /* リーチ牌は縦倒し */
+        }
+
+        .river-top .river-tile {
+            /* 西は逆向き */
+            transform: rotate(180deg);
+        }
+
+        .river-top .river-tile.reach {
+            transform: rotate(90deg); /* リーチ牌は横倒し */
         }
 
         /* 中央情報エリア */
@@ -273,6 +378,241 @@
             color: #ccc;
         }
 
+        /* リーチ棒スタイル */
+        .riichi-stick {
+            background: linear-gradient(135deg, #ff6b6b, #ff5252);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-top: 10px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+            border: 2px solid #fff;
+        }
+
+        @keyframes riichiPlace {
+            0% {
+                transform: translateY(-20px) scale(0.8);
+                opacity: 0;
+            }
+            50% {
+                transform: translateY(-5px) scale(1.1);
+                opacity: 0.8;
+            }
+            100% {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* 吹き出しスタイル */
+        .speech-bubbles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .speech-bubble {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid #333;
+            border-radius: 20px;
+            padding: 10px 15px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #333;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            white-space: nowrap;
+            animation: speechAppear 0.3s ease-out;
+        }
+
+        .speech-bubble::after {
+            content: '';
+            position: absolute;
+            border: 8px solid transparent;
+            border-top-color: rgba(255, 255, 255, 0.95);
+        }
+
+        /* プレイヤー位置別の吹き出し配置 */
+        #speechBubble0 { /* 下（自分） */
+            bottom: 200px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #speechBubble0::after {
+            bottom: -16px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        #speechBubble1 { /* 左 */
+            left: 100px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        #speechBubble1::after {
+            left: -16px;
+            top: 50%;
+            transform: translateY(-50%) rotate(90deg);
+        }
+
+        #speechBubble2 { /* 上（対面） */
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #speechBubble2::after {
+            top: -16px;
+            left: 50%;
+            transform: translateX(-50%) rotate(180deg);
+        }
+
+        #speechBubble3 { /* 右 */
+            right: 100px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        #speechBubble3::after {
+            right: -16px;
+            top: 50%;
+            transform: translateY(-50%) rotate(-90deg);
+        }
+
+        @keyframes speechAppear {
+            0% {
+                transform: scale(0) translateX(-50%);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.1) translateX(-50%);
+                opacity: 0.8;
+            }
+            100% {
+                transform: scale(1) translateX(-50%);
+                opacity: 1;
+            }
+        }
+
+        /* 2K対応メルド表示エリア */
+        .meld-area {
+            display: flex;
+            gap: 12px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .player-meld-area {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            min-height: 80px;
+            width: 100%;
+        }
+
+        /* プレイヤー別メルド配置 */
+        .player-top .meld-area {
+            position: absolute;
+            top: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 400px;
+        }
+
+        .player-left .meld-area {
+            position: absolute;
+            right: -450px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 400px;
+        }
+
+        .player-right .meld-area {
+            position: absolute;
+            left: -450px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 400px;
+        }
+
+        .meld-group {
+            display: flex;
+            gap: 2px;
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            padding: 4px;
+            margin-right: 8px;
+            position: relative;
+        }
+
+        .meld-group.chi {
+            border-color: #28a745;
+        }
+
+        .meld-group.pon {
+            border-color: #ffc107;
+        }
+
+        .meld-group.kan {
+            border-color: #dc3545;
+        }
+
+        .meld-tile {
+            width: 48px;
+            height: 64px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border: 2px solid #666;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            font-weight: bold;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .meld-tile.red {
+            color: #dc3545;
+        }
+
+        .meld-tile.called {
+            transform: rotate(90deg);
+            background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+        }
+
+        .meld-label {
+            position: absolute;
+            top: -8px;
+            left: 4px;
+            background: #007bff;
+            color: white;
+            font-size: 0.6rem;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .meld-group.chi .meld-label {
+            background: #28a745;
+        }
+
+        .meld-group.pon .meld-label {
+            background: #ffc107;
+            color: #000;
+        }
+
+        .meld-group.kan .meld-label {
+            background: #dc3545;
+        }
+
         /* 下部プレイヤーの河は逆順配置 */
         .river-bottom {
             direction: rtl;
@@ -281,14 +621,33 @@
         .river-bottom .river-tile {
             direction: ltr;
         }
+        
+        /* 河の表示方向修正 */
+        .river-bottom {
+            direction: ltr; /* 左から右へ */
+        }
+        
+        /* デバッグ用: 自分の河の配置確認 */
+        .river-bottom .river-tile {
+            position: relative;
+        }
+        
+        .river-bottom .river-tile::before {
+            content: attr(data-order);
+            position: absolute;
+            top: -10px;
+            left: 0;
+            font-size: 8px;
+            color: red;
+        }
 
-        /* プレイヤーエリア（下部） */
+        /* 2K対応プレイヤーエリア（下部） */
         .player-bottom-area {
             background: rgba(255, 255, 255, 0.95);
-            margin: 0 20px 20px 20px;
-            border-radius: 12px;
-            padding: 15px;
-            border: 3px solid #ffc107;
+            margin: 0 40px 40px 40px;
+            border-radius: 15px;
+            padding: 25px;
+            border: 4px solid #ffc107;
         }
 
         .player-hand-header {
@@ -436,12 +795,12 @@
         /* アクションボタン */
         .action-panel {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
+            bottom: 40px;
+            left: 40px;
             display: flex;
-            gap: 10px;
+            gap: 15px;
             flex-wrap: wrap;
-            max-width: 300px;
+            max-width: 500px;
             z-index: 50;
         }
 
@@ -469,15 +828,16 @@
         /* 情報パネル */
         .info-panel {
             position: fixed;
-            top: 80px;
-            right: 20px;
-            width: 250px;
+            bottom: 200px;
+            left: 40px;
+            width: 280px;
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(10px);
-            border-radius: 12px;
-            padding: 15px;
+            border-radius: 15px;
+            padding: 20px;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
             z-index: 50;
+            font-size: 1rem;
         }
 
         .game-status {
@@ -589,6 +949,7 @@
 
             <div class="game-controls">
                 <button class="btn btn-info" onclick="toggleDebug()">デバッグ</button>
+                <button id="cpuAutoBtn" class="btn btn-success" onclick="toggleCpuAuto()">CPU自動開始</button>
                 <button class="btn btn-warning" onclick="newGame()">新しいゲーム</button>
                 <a href="/title.html" class="btn btn-info">タイトル</a>
             </div>
@@ -601,8 +962,12 @@
                 <div class="player-info">
                     <div class="player-name">CPU西</div>
                     <div class="player-wind">西</div>
+                    <div class="player-score">
+                        <span id="player2Score">25000</span>点
+                    </div>
                 </div>
                 <div class="opponent-tiles" id="hand2"></div>
+                <div class="meld-area" id="melds2"></div>
             </div>
 
             <!-- 右側プレイヤー -->
@@ -610,8 +975,12 @@
                 <div class="player-info">
                     <div class="player-name">CPU北</div>
                     <div class="player-wind">北</div>
+                    <div class="player-score">
+                        <span id="player3Score">25000</span>点
+                    </div>
                 </div>
                 <div class="opponent-tiles" id="hand3"></div>
+                <div class="meld-area" id="melds3"></div>
             </div>
 
             <!-- 左側プレイヤー -->
@@ -619,8 +988,12 @@
                 <div class="player-info">
                     <div class="player-name">CPU南</div>
                     <div class="player-wind">南</div>
+                    <div class="player-score">
+                        <span id="player1Score">25000</span>点
+                    </div>
                 </div>
                 <div class="opponent-tiles" id="hand1"></div>
+                <div class="meld-area" id="melds1"></div>
             </div>
 
             <!-- 中央の河エリア（本格麻雀レイアウト） -->
@@ -642,6 +1015,10 @@
                         <div class="remaining-tiles">
                             残り: <span id="remainingTilesDisplay">69</span>枚
                         </div>
+                        <!-- リーチ棒 -->
+                        <div class="riichi-stick" id="riichiStick" style="display: none;">
+                            1000点棒
+                        </div>
                     </div>
                     
                     <!-- 右側プレイヤーの河 -->
@@ -651,6 +1028,14 @@
                 <!-- 下側プレイヤーの河 -->
                 <div class="river-area river-bottom" id="river0"></div>
             </div>
+        </div>
+
+        <!-- 吹き出し表示エリア -->
+        <div class="speech-bubbles">
+            <div class="speech-bubble" id="speechBubble0" style="display: none;"></div>
+            <div class="speech-bubble" id="speechBubble1" style="display: none;"></div>
+            <div class="speech-bubble" id="speechBubble2" style="display: none;"></div>
+            <div class="speech-bubble" id="speechBubble3" style="display: none;"></div>
         </div>
 
         <!-- プレイヤーエリア（下部） -->
@@ -669,6 +1054,9 @@
             </div>
             
             <div class="player-hand" id="hand0"></div>
+            
+            <!-- プレイヤー0のメルド表示エリア -->
+            <div class="meld-area player-meld-area" id="melds0"></div>
             
         </div>
 
@@ -712,7 +1100,7 @@
         </div>
         
         <!-- デバッグパネル -->
-        <div class="debug-panel" style="position: fixed; top: 120px; left: 20px; background: rgba(0,0,0,0.9); color: white; padding: 12px; border-radius: 8px; font-size: 0.8rem; z-index: 100; max-width: 200px;">
+        <div class="debug-panel" style="position: fixed; bottom: 160px; right: 20px; background: rgba(0,0,0,0.9); color: white; padding: 10px; border-radius: 8px; font-size: 0.75rem; z-index: 100; max-width: 180px;">
             <div style="font-weight: bold; margin-bottom: 8px;">🔧 デバッグ操作</div>
             <div style="display: grid; grid-template-columns: 1fr; gap: 6px;">
                 <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="forceCPUTurn()">CPU強制実行</button>
@@ -720,6 +1108,8 @@
                 <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="toggleDebugMode()">デバッグ切替</button>
                 <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="skipToNextPlayer()">次プレイヤー</button>
                 <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="showDiscards()">捨て牌確認</button>
+                <button class="btn" style="background: #17a2b8; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="testDiscardCoordinates()">座標テスト</button>
+                <button class="btn" style="background: #dc3545; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="showErrorLogs()">エラーログ</button>
                 <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="clearConsole()">コンソール消去</button>
             </div>
         </div>
@@ -728,8 +1118,8 @@
     <!-- 通知 -->
     <div class="notification" id="notification"></div>
 
-    <!-- 音効制御パネル -->
-    <div style="position: fixed; top: 10px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.8); padding: 8px; border-radius: 6px; color: white;">
+    <!-- 音効制御パネル（位置修正：ヘッダーと重複回避） -->
+    <div style="position: fixed; top: 70px; right: 10px; z-index: 1000; background: rgba(0,0,0,0.8); padding: 8px; border-radius: 6px; color: white;">
         <div style="display: flex; align-items: center; gap: 8px;">
             <button onclick="toggleSound()" id="soundToggle" class="btn" style="background: #28a745; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">🔊</button>
             <input type="range" id="volumeSlider" min="0" max="100" value="70" onchange="setVolume(this.value)" style="width: 60px;">
@@ -742,6 +1132,62 @@
         let selectedTile = null;
         let gameState = null;
         let debugMode = false;
+        let lastDiscardedTile = null;
+        let lastDiscardedPlayer = null;
+        
+        // Socket.IO接続
+        const socket = io();
+        let isConnected = false;
+        
+        // Socket.IOイベントハンドリング
+        socket.on('connect', () => {
+            console.log('🔌 Socket.IO接続成功');
+            isConnected = true;
+        });
+        
+        socket.on('disconnect', () => {
+            console.log('🔌 Socket.IO切断');
+            isConnected = false;
+        });
+        
+        socket.on('gameUpdate', (newGameState) => {
+            console.log('🔄 リアルタイムゲーム状態更新受信');
+            gameState = newGameState;
+            updateGameDisplay();
+        });
+        
+        socket.on('roomCreated', (data) => {
+            console.log('🎮 ルーム作成成功:', data);
+            gameId = data.roomId;
+            gameState = data.gameState;
+            updateGameDisplay();
+        });
+        
+        socket.on('roomJoined', (data) => {
+            console.log('🎮 ルーム参加成功:', data);
+            gameId = data.roomId;
+            gameState = data.gameState;
+            updateGameDisplay();
+        });
+        
+        socket.on('actionResult', (result) => {
+            console.log('✅ アクション結果:', result);
+            if (result.success) {
+                showNotification(result.message, 'success');
+            } else {
+                showNotification(result.message, 'error');
+            }
+        });
+        
+        socket.on('error', (error) => {
+            console.error('❌ Socket.IOエラー:', error);
+            showNotification(error.message, 'error');
+        });
+        
+        socket.on('roomError', (error) => {
+            console.error('❌ ルームエラー:', error);
+            showNotification(error.message, 'error');
+        });
 
         // 音効制御関数
         function toggleSound() {
@@ -767,6 +1213,10 @@
                 console.warn('🔍 DEBUG: SoundManager init failed:', error);
             }
             
+            // 捨て牌テスト機能を初期化
+            addDiscardClickTest();
+            console.log('🔍 DEBUG: Discard click test initialized');
+            
             newGame();
             
             try {
@@ -777,31 +1227,19 @@
         });
 
         // 新しいゲーム作成
-        async function newGame() {
-            try {
-                showNotification('新しいゲームを作成中...', 'info');
-                
-                const response = await fetch('/api/game/create', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                const result = await response.json();
-                
-                if (result.status === 'OK') {
-                    gameId = result.data.gameId;
-                    gameState = result.data.gameState;
-                    updateGameDisplay();
-                    showNotification('ゲームが開始されました！', 'success');
-                } else {
-                    showNotification('ゲーム作成に失敗しました', 'error');
-                }
-            } catch (error) {
-                console.error('Game creation error:', error);
-                showNotification('エラーが発生しました', 'error');
+        function newGame() {
+            if (!isConnected) {
+                showNotification('サーバーに接続されていません', 'error');
+                return;
             }
+            
+            showNotification('新しいゲームを作成中...', 'info');
+            
+            // Socket.IOでルーム作成要求
+            socket.emit('createRoom', {
+                playerId: 'player_0',
+                playerName: 'プレイヤー1'
+            });
         }
 
         // ゲーム状態更新
@@ -908,6 +1346,12 @@
                                 tileElement.textContent = '🀫';
                                 handElement.appendChild(tileElement);
                             }
+                            
+                            // CPU点数更新
+                            const scoreElement = document.getElementById(`player${index}Score`);
+                            if (scoreElement) {
+                                scoreElement.textContent = player.score;
+                            }
                         }
                     } else {
                         console.warn(`🔍 DEBUG: Cannot update hand for player ${index} - missing handElement or tiles`);
@@ -939,11 +1383,21 @@
                                 tileElement.classList.add('reach');
                             }
                             
+                            // 鳴いた牌（チー・ポン・カンで呼ばれた牌）の判定
+                            if (isCalledTile(tile, playerIndex, discardIndex)) {
+                                tileElement.classList.add('called');
+                            }
+                            
                             tileElement.textContent = tile.displayName || tile.unicode;
                             
                             // 6×3グリッドの配置順序
                             const gridOrder = calculateRiverOrder(playerIndex, discardIndex);
                             tileElement.style.order = gridOrder;
+                            
+                            // デバッグ用: order値を表示
+                            if (playerIndex === 0) {
+                                tileElement.setAttribute('data-order', gridOrder);
+                            }
                             
                             riverElement.appendChild(tileElement);
                         });
@@ -951,25 +1405,34 @@
                 });
             }
 
+            // 最後の捨牌情報を更新（鳴き判定用）
+            updateLastDiscardedTile();
+            
             // ゲームステータス更新
             updateGameStatus();
+            
+            // メルド表示更新
+            updateMeldDisplay();
         }
 
         // 河の配置順序計算（本格麻雀仕様）
         function calculateRiverOrder(playerIndex, discardIndex) {
-            // 6×3のグリッドで、プレイヤーごとに捨牌の向きが異なる
             const row = Math.floor(discardIndex / 6);
             const col = discardIndex % 6;
             
             switch (playerIndex) {
-                case 0: // 下部プレイヤー（自分）：左から右、上から下
+                case 0: // 下部プレイヤー（自分）：左から右、上から下、6枚で改行
                     return row * 6 + col;
-                case 1: // 左プレイヤー：上から下、左から右（3×6）
-                    return Math.floor(discardIndex / 3) * 3 + (discardIndex % 3);
-                case 2: // 上部プレイヤー：右から左、下から上
+                case 1: // 左プレイヤー（南）：上から下、右から左、3列6行（横向き視点）
+                    const rowSouth = Math.floor(discardIndex / 6);
+                    const colSouth = discardIndex % 6;
+                    return colSouth * 6 + rowSouth;
+                case 2: // 上部プレイヤー（西）：右から左、下から上（対面視点）
                     return (2 - row) * 6 + (5 - col);
-                case 3: // 右プレイヤー：下から上、右から左（3×6）
-                    return (5 - Math.floor(discardIndex / 3)) * 3 + (2 - (discardIndex % 3));
+                case 3: // 右プレイヤー（北）：下から上、左から右、3列6行（横向き視点）
+                    const rowNorth = Math.floor(discardIndex / 6);
+                    const colNorth = discardIndex % 6;
+                    return (5 - colNorth) * 6 + (2 - rowNorth);
                 default:
                     return discardIndex;
             }
@@ -983,6 +1446,60 @@
                 return tile1.honor === tile2.honor;
             }
             return tile1.rank === tile2.rank;
+        }
+        
+        // 鳴いた牌かどうかを判定
+        function isCalledTile(tile, playerIndex, discardIndex) {
+            if (!gameState || !gameState.gameLog) return false;
+            
+            // ゲームログから鳴きアクションを検索
+            for (let i = 0; i < gameState.gameLog.length; i++) {
+                const log = gameState.gameLog[i];
+                
+                // チー・ポン・カンアクションを探す
+                if (log.type === 'meld' && log.calledTile) {
+                    // 鳴いた牌と捨牌のタイルが一致するかチェック
+                    if (isSameTile(tile, log.calledTile)) {
+                        // 鳴いた元のプレイヤーと現在の捨牌位置が一致するかチェック
+                        if (log.fromPlayer === playerIndex) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            
+            return false;
+        }
+        
+        // 最後の捨牌情報を更新
+        function updateLastDiscardedTile() {
+            if (!gameState) return;
+            
+            // gameStateから直接取得を試す
+            if (gameState.lastDiscard && gameState.lastDiscardPlayer !== undefined) {
+                lastDiscardedTile = gameState.lastDiscard;
+                lastDiscardedPlayer = gameState.lastDiscardPlayer;
+                console.log(`🔧 Last discard from gameState: ${lastDiscardedTile.displayName} by player ${lastDiscardedPlayer}`);
+                return;
+            }
+            
+            // フォールバック：ゲームログを逆順で検索して最後の捨牌を見つける
+            if (gameState.gameLog) {
+                for (let i = gameState.gameLog.length - 1; i >= 0; i--) {
+                    const log = gameState.gameLog[i];
+                    if (log.type === 'discard' && log.data && log.data.tile) {
+                        lastDiscardedTile = log.data.tile;
+                        lastDiscardedPlayer = parseInt(log.playerId.replace('player_', ''));
+                        console.log(`🔧 Last discard from log: ${log.data.tile.displayName} by player ${lastDiscardedPlayer}`);
+                        return;
+                    }
+                }
+            }
+            
+            // 捨牌が見つからない場合はリセット
+            lastDiscardedTile = null;
+            lastDiscardedPlayer = null;
+            console.log(`🔧 No last discard found, reset to null`);
         }
 
         // ゲームステータス更新
@@ -1006,6 +1523,146 @@
             
             statusElement.textContent = statusText;
             statusElement.style.color = isMyTurn ? '#28a745' : '#6c757d';
+            
+            // アクションボタンの表示制御
+            updateActionButtons();
+        }
+        
+        // アクションボタンの表示制御
+        function updateActionButtons() {
+            if (!gameState) return;
+            
+            const isMyTurn = gameState.currentPlayer === 0;
+            const player = gameState.players?.[0];
+            const handCount = player?.hand?.tiles?.length || 0;
+            
+            // 基本ボタン制御
+            const drawBtn = document.getElementById('drawBtn');
+            const discardBtn = document.getElementById('discardBtn');
+            const riichiBtn = document.getElementById('riichiBtn');
+            const tsumoBtn = document.getElementById('tsumoBtn');
+            
+            if (drawBtn) drawBtn.style.display = (isMyTurn && handCount === 13) ? 'inline-block' : 'none';
+            if (discardBtn) discardBtn.style.display = (isMyTurn && handCount === 14) ? 'inline-block' : 'none';
+            if (riichiBtn) riichiBtn.style.display = (isMyTurn && handCount === 14 && canCallRiichi()) ? 'inline-block' : 'none';
+            if (tsumoBtn) tsumoBtn.style.display = (isMyTurn && handCount === 14 && canCallTsumo()) ? 'inline-block' : 'none';
+            
+            // メルドボタンは相手のターンでも表示可能
+            const chiBtn = document.getElementById('chiBtn');
+            const ponBtn = document.getElementById('ponBtn');
+            const kanBtn = document.getElementById('kanBtn');
+            const ronBtn = document.getElementById('ronBtn');
+            
+            if (chiBtn) chiBtn.style.display = (!isMyTurn && canCallChi()) ? 'inline-block' : 'none';
+            if (ponBtn) ponBtn.style.display = (!isMyTurn && canCallPon()) ? 'inline-block' : 'none';
+            if (kanBtn) kanBtn.style.display = (isMyTurn && canCallKan()) ? 'inline-block' : 'none';
+            if (ronBtn) ronBtn.style.display = (!isMyTurn && canCallRon()) ? 'inline-block' : 'none';
+            
+            // 捨て牌更新を追跡
+            trackDiscardUpdates();
+        }
+        
+        // アクション可能性チェック関数
+        function canCallRiichi() {
+            if (!gameState || !gameState.players[0]) return false;
+            const player = gameState.players[0];
+            return !player.hand.riichi && player.score >= 1000; // 既にリーチしてない、1000点以上ある
+        }
+        
+        function canCallTsumo() {
+            // 実際のツモ判定は複雑なので、とりあえず常にfalse
+            return false;
+        }
+        
+        function canCallChi() {
+            if (!gameState || !gameState.players[0] || !lastDiscardedTile) return false;
+            
+            // チーは前のプレイヤーからのみ可能
+            const prevPlayer = (gameState.currentPlayer + 3) % 4;
+            if (lastDiscardedPlayer !== prevPlayer) return false;
+            
+            // 既にリーチしている場合は鳴けない
+            if (gameState.players[0].hand.riichi) return false;
+            
+            // 簡易判定: 同じスート（ji以外）で連続する牌があるかチェック
+            const discardedTile = lastDiscardedTile;
+            if (discardedTile.suit === 'ji') return false; // 字牌はチー不可
+            
+            const myTiles = gameState.players[0].hand.tiles;
+            const targetRank = discardedTile.rank;
+            
+            // 連続する牌の組み合わせをチェック
+            const hasSequence = myTiles.some((tile1, i) => 
+                myTiles.some((tile2, j) => {
+                    if (i >= j) return false;
+                    if (tile1.suit !== discardedTile.suit || tile2.suit !== discardedTile.suit) return false;
+                    
+                    // 3つの数字の組み合わせをチェック
+                    const ranks = [tile1.rank, tile2.rank, targetRank].sort((a, b) => a - b);
+                    return ranks[0] + 1 === ranks[1] && ranks[1] + 1 === ranks[2];
+                })
+            );
+            
+            return hasSequence;
+        }
+        
+        function canCallPon() {
+            if (!gameState || !gameState.players[0] || !lastDiscardedTile) return false;
+            
+            // 既にリーチしている場合は鳴けない
+            if (gameState.players[0].hand.riichi) return false;
+            
+            // 同じ牌が2枚以上手牌にあるかチェック
+            const discardedTile = lastDiscardedTile;
+            const myTiles = gameState.players[0].hand.tiles;
+            
+            let matchCount = 0;
+            for (const tile of myTiles) {
+                if (isSameTile(tile, discardedTile)) {
+                    matchCount++;
+                    if (matchCount >= 2) return true;
+                }
+            }
+            
+            return false;
+        }
+        
+        function canCallKan() {
+            if (!gameState || !gameState.players[0]) return false;
+            
+            // 既にリーチしている場合は鳴けない（暗槓は例外だが簡略化）
+            if (gameState.players[0].hand.riichi) return false;
+            
+            const myTiles = gameState.players[0].hand.tiles;
+            
+            // 同じ牌が4枚あるかチェック（暗槓）
+            const tileCounts = {};
+            for (const tile of myTiles) {
+                const key = `${tile.suit}_${tile.rank}_${tile.honor}`;
+                tileCounts[key] = (tileCounts[key] || 0) + 1;
+                if (tileCounts[key] >= 4) return true;
+            }
+            
+            // 明槓の場合（相手の捨牌+手牌3枚）
+            if (lastDiscardedTile) {
+                let matchCount = 0;
+                for (const tile of myTiles) {
+                    if (isSameTile(tile, lastDiscardedTile)) {
+                        matchCount++;
+                        if (matchCount >= 3) return true;
+                    }
+                }
+            }
+            
+            return false;
+        }
+        
+        function canCallRon() {
+            if (!gameState || !gameState.players[0] || !lastDiscardedTile) return false;
+            
+            // 簡易和了判定（実際はもっと複雑）
+            // ここでは常にfalseを返すが、将来的に和了判定ロジックを実装
+            return false;
         }
 
         // 牌選択
@@ -1037,97 +1694,52 @@
         }
 
         // 打牌処理
-        async function discardSelected() {
-            if (!selectedTile || !gameId) {
+        function discardSelected() {
+            if (!selectedTile || !gameId || !isConnected) {
                 showNotification('牌を選択してください', 'warning');
                 return;
             }
 
-            try {
-                const response = await fetch(`/api/game/${gameId}/action`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        type: 'discard',
-                        playerId: 'player_0',
-                        tileId: selectedTile.tile.id
-                    })
-                });
-
-                const result = await response.json();
-                
-                if (result.status === 'OK') {
-                    gameState = result.data.gameState;
-                    selectedTile = null;
-                    updateGameDisplay();
-                    soundManager.playSound('tilePlace');
-                    showNotification('打牌しました', 'success');
-                } else {
-                    showNotification(result.message || '打牌に失敗しました', 'error');
-                }
-            } catch (error) {
-                console.error('Discard error:', error);
-                showNotification('エラーが発生しました', 'error');
-            }
+            console.log('🎯 打牌アクション送信:', selectedTile.tile);
+            socket.emit('playerAction', {
+                type: 'discard',
+                playerId: 'player_0',
+                tileId: selectedTile.tile.id,
+                priority: 1,
+                timestamp: Date.now()
+            });
+            
+            selectedTile = null;
+            soundManager.playSound('tilePlace');
         }
 
         // ツモ処理
-        async function drawTile() {
-            if (!gameId) return;
-            
-            try {
-                const response = await fetch(`/api/game/${gameId}/action`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        type: 'draw',
-                        playerId: 'player_0'
-                    })
-                });
-
-                const result = await response.json();
-                if (result.status === 'OK') {
-                    gameState = result.data.gameState;
-                    updateGameDisplay();
-                    soundManager.playSound('tilePlace');
-                    showNotification('ツモしました', 'success');
-                } else {
-                    showNotification(result.message || 'ツモに失敗しました', 'error');
-                }
-            } catch (error) {
-                console.error('Draw error:', error);
-                showNotification('エラーが発生しました', 'error');
+        function drawTile() {
+            if (!gameId || !isConnected) {
+                showNotification('ゲームに接続されていません', 'error');
+                return;
             }
+            
+            console.log('🎯 ツモアクション送信');
+            socket.emit('playerAction', {
+                type: 'draw',
+                playerId: 'player_0',
+                priority: 1,
+                timestamp: Date.now()
+            });
+            
+            soundManager.playSound('tilePlace');
         }
 
         // ゲーム状態取得
-        async function requestGameState() {
-            if (!gameId) return;
-            
-            try {
-                const response = await fetch(`/api/game/${gameId}`);
-                const result = await response.json();
-                
-                if (result.status === 'OK') {
-                    console.log('🔍 DEBUG: API response:', result);
-                    // APIレスポンスの構造に応じて適切にgameStateを設定
-                    if (result.data.gameState) {
-                        gameState = result.data.gameState;
-                    } else {
-                        gameState = result.data;
-                    }
-                    console.log('🔍 DEBUG: Set gameState to:', gameState);
-                    updateGameDisplay();
-                    showNotification('状態を更新しました', 'success');
-                } else {
-                    showNotification('更新に失敗しました', 'error');
-                }
-            } catch (error) {
-                console.error('Game state error:', error);
-                showNotification('エラーが発生しました', 'error');
+        function requestGameState() {
+            if (!gameId || !isConnected) {
+                showNotification('ゲームに接続されていません', 'error');
+                return;
             }
+            
+            console.log('🔄 ゲーム状態をリクエスト');
+            socket.emit('requestGameState');
         }
 
         // AI実行
@@ -1157,54 +1769,195 @@
 
         // 鳴き関数
         // チー
-        function callChi() {
-            if (!gameState || gameState.currentPlayer === 0) {
+        async function callChi() {
+            if (!gameState || !lastDiscardedTile) {
                 showNotification('チーできません', 'error');
                 return;
             }
             
-            performAction('chi', {}, (result) => {
-                if (result.success) {
-                    showNotification('チーしました', 'success');
-                    requestGameState();
-                } else {
-                    showNotification(`チーできません: ${result.error}`, 'error');
+            try {
+                // 手牌からチーに使用する牌を見つける
+                const myTiles = gameState.players[0].hand.tiles;
+                const targetRank = lastDiscardedTile.rank;
+                
+                // 連続する牌の組み合わせを探す
+                let chiTiles = null;
+                for (let i = 0; i < myTiles.length - 1; i++) {
+                    for (let j = i + 1; j < myTiles.length; j++) {
+                        const tile1 = myTiles[i];
+                        const tile2 = myTiles[j];
+                        
+                        if (tile1.suit !== lastDiscardedTile.suit || tile2.suit !== lastDiscardedTile.suit) continue;
+                        if (tile1.suit === 'ji') continue; // 字牌はチー不可
+                        
+                        const ranks = [tile1.rank, tile2.rank, targetRank].sort((a, b) => a - b);
+                        if (ranks[0] + 1 === ranks[1] && ranks[1] + 1 === ranks[2]) {
+                            chiTiles = [tile1, tile2];
+                            break;
+                        }
+                    }
+                    if (chiTiles) break;
                 }
-            });
+                
+                if (!chiTiles) {
+                    showNotification('チーできる牌がありません', 'error');
+                    return;
+                }
+                
+                // メルドオブジェクトを構築
+                const meld = {
+                    id: `chi_${Date.now()}_player0`,
+                    type: 'chi',
+                    tiles: [...chiTiles, lastDiscardedTile],
+                    fromPlayer: lastDiscardedPlayer,
+                    isConcealed: false,
+                    calledTile: lastDiscardedTile
+                };
+
+                console.log('🎯 チーアクション送信');
+                socket.emit('playerAction', {
+                    type: 'chi',
+                    playerId: 'player_0',
+                    meld: meld,
+                    tile: lastDiscardedTile,
+                    priority: 2,
+                    timestamp: Date.now()
+                });
+                
+                soundManager.playSound('meld');
+            } catch (error) {
+                console.error('Chi error:', error);
+                showNotification('エラーが発生しました', 'error');
+            }
         }
 
         // ポン
-        function callPon() {
-            if (!gameState || gameState.currentPlayer === 0) {
+        async function callPon() {
+            if (!gameState || !lastDiscardedTile) {
                 showNotification('ポンできません', 'error');
                 return;
             }
             
-            performAction('pon', {}, (result) => {
-                if (result.success) {
-                    showNotification('ポンしました', 'success');
-                    requestGameState();
-                } else {
-                    showNotification(`ポンできません: ${result.error}`, 'error');
+            try {
+                // 手牌から同じ牌を2枚探す
+                const myTiles = gameState.players[0].hand.tiles;
+                const matchingTiles = [];
+                
+                for (const tile of myTiles) {
+                    if (isSameTile(tile, lastDiscardedTile)) {
+                        matchingTiles.push(tile);
+                        if (matchingTiles.length >= 2) break;
+                    }
                 }
-            });
+                
+                if (matchingTiles.length < 2) {
+                    showNotification('ポンできる牌がありません', 'error');
+                    return;
+                }
+                
+                // メルドオブジェクトを構築
+                const meld = {
+                    id: `pon_${Date.now()}_player0`,
+                    type: 'pon',
+                    tiles: [...matchingTiles, lastDiscardedTile],
+                    fromPlayer: lastDiscardedPlayer,
+                    isConcealed: false,
+                    calledTile: lastDiscardedTile
+                };
+
+                console.log('🎯 ポンアクション送信');
+                socket.emit('playerAction', {
+                    type: 'pon',
+                    playerId: 'player_0',
+                    meld: meld,
+                    tile: lastDiscardedTile,
+                    priority: 2,
+                    timestamp: Date.now()
+                });
+                
+                soundManager.playSound('meld');
+            } catch (error) {
+                console.error('Pon error:', error);
+                showNotification('エラーが発生しました', 'error');
+            }
         }
 
         // カン
-        function callKan() {
-            if (!gameState || gameState.currentPlayer === 0) {
+        async function callKan() {
+            if (!gameState) {
                 showNotification('カンできません', 'error');
                 return;
             }
             
-            performAction('kan', {}, (result) => {
-                if (result.success) {
-                    showNotification('カンしました', 'success');
-                    requestGameState();
-                } else {
-                    showNotification(`カンできません: ${result.error}`, 'error');
+            try {
+                const myTiles = gameState.players[0].hand.tiles;
+                let kanTiles = [];
+                let kanType = null;
+                
+                // 明槓の場合（相手の捨牌+手牌3枚）
+                if (lastDiscardedTile) {
+                    const matchingTiles = [];
+                    for (const tile of myTiles) {
+                        if (isSameTile(tile, lastDiscardedTile)) {
+                            matchingTiles.push(tile);
+                            if (matchingTiles.length >= 3) break;
+                        }
+                    }
+                    
+                    if (matchingTiles.length >= 3) {
+                        kanTiles = [...matchingTiles, lastDiscardedTile];
+                        kanType = 'kan';
+                    }
                 }
-            });
+                
+                // 暗槓の場合（手牌4枚）
+                if (kanTiles.length === 0) {
+                    const tileCounts = {};
+                    for (const tile of myTiles) {
+                        const key = `${tile.suit}_${tile.rank}_${tile.honor}`;
+                        if (!tileCounts[key]) tileCounts[key] = [];
+                        tileCounts[key].push(tile);
+                    }
+                    
+                    for (const [key, tiles] of Object.entries(tileCounts)) {
+                        if (tiles.length >= 4) {
+                            kanTiles = tiles.slice(0, 4);
+                            kanType = 'ankan';
+                            break;
+                        }
+                    }
+                }
+                
+                if (kanTiles.length === 0) {
+                    showNotification('カンできる牌がありません', 'error');
+                    return;
+                }
+                
+                // メルドオブジェクトを構築
+                const meld = {
+                    id: `kan_${Date.now()}_player0`,
+                    type: kanType,
+                    tiles: kanTiles,
+                    fromPlayer: kanType === 'ankan' ? 0 : lastDiscardedPlayer,
+                    isConcealed: kanType === 'ankan',
+                    calledTile: kanType === 'ankan' ? null : lastDiscardedTile
+                };
+
+                console.log('🎯 カンアクション送信');
+                socket.emit('playerAction', {
+                    type: kanType,
+                    playerId: 'player_0',
+                    meld: meld,
+                    tile: kanType === 'ankan' ? kanTiles[0] : lastDiscardedTile,
+                    priority: 3,
+                    timestamp: Date.now()
+                });
+                
+                soundManager.playSound('meld');
+            } catch (error) {
+                console.error('Kan error:', error);
+                showNotification('エラーが発生しました', 'error');
+            }
         }
 
         // ツモ和了
@@ -1254,19 +2007,226 @@
                 return;
             }
             
+            if (!canCallRiichi()) {
+                showNotification('リーチできません（条件を満たしていません）', 'error');
+                return;
+            }
+            
+            // リーチ棒演出
+            showRiichiStick();
+            
             performAction('riichi', {}, (result) => {
                 if (result.success) {
                     showNotification('リーチ！', 'success');
                     requestGameState();
                 } else {
                     showNotification(`リーチできません: ${result.error}`, 'error');
+                    hideRiichiStick(); // 失敗時は棒を隠す
                 }
             });
+        }
+        
+        // リーチ棒演出
+        function showRiichiStick() {
+            const riichiStick = document.getElementById('riichiStick');
+            if (riichiStick) {
+                riichiStick.style.display = 'block';
+                riichiStick.style.animation = 'riichiPlace 0.5s ease-out';
+                riichiStick.textContent = '1000点棒';
+            }
+        }
+        
+        function hideRiichiStick() {
+            const riichiStick = document.getElementById('riichiStick');
+            if (riichiStick) {
+                riichiStick.style.display = 'none';
+            }
+        }
+        
+        // 吹き出し表示機能
+        function showSpeechBubble(playerIndex, message, duration = 2000) {
+            const bubble = document.getElementById(`speechBubble${playerIndex}`);
+            if (bubble) {
+                bubble.textContent = message;
+                bubble.style.display = 'block';
+                bubble.style.animation = 'speechAppear 0.3s ease-out';
+                
+                // 一定時間後に自動非表示
+                setTimeout(() => {
+                    bubble.style.display = 'none';
+                }, duration);
+            }
+        }
+        
+        // メルド宣言用の吹き出し
+        function showMeldAnnouncement(playerIndex, meldType, tiles) {
+            let message = '';
+            switch (meldType) {
+                case 'chi':
+                    message = 'チー！';
+                    break;
+                case 'pon':
+                    message = 'ポン！';
+                    break;
+                case 'kan':
+                    message = 'カン！';
+                    break;
+                case 'riichi':
+                    message = 'リーチ！';
+                    break;
+                case 'tsumo':
+                    message = 'ツモ！';
+                    break;
+                case 'ron':
+                    message = 'ロン！';
+                    break;
+                default:
+                    message = meldType;
+            }
+            showSpeechBubble(playerIndex, message, 3000);
+        }
+        
+        // メルド表示機能
+        function updateMeldDisplay() {
+            if (!gameState || !gameState.players) return;
+            
+            gameState.players.forEach((player, playerIndex) => {
+                const meldArea = document.getElementById(`melds${playerIndex}`);
+                if (!meldArea) return;
+                
+                meldArea.innerHTML = '';
+                
+                if (player.hand && player.hand.melds) {
+                    player.hand.melds.forEach((meld, meldIndex) => {
+                        const meldGroup = createMeldDisplay(meld);
+                        meldArea.appendChild(meldGroup);
+                    });
+                }
+            });
+        }
+        
+        function createMeldDisplay(meld) {
+            const meldGroup = document.createElement('div');
+            meldGroup.className = `meld-group ${meld.type}`;
+            
+            // メルドラベル
+            const label = document.createElement('div');
+            label.className = 'meld-label';
+            label.textContent = meld.type.toUpperCase();
+            meldGroup.appendChild(label);
+            
+            // メルドの牌表示
+            meld.tiles.forEach((tile, tileIndex) => {
+                const tileElement = document.createElement('div');
+                tileElement.className = 'meld-tile';
+                
+                if (tile.isRed) tileElement.classList.add('red');
+                
+                // 鳴いた牌は横向き（チー・ポンの場合、最後の牌）
+                if (meld.type !== 'kan' && tileIndex === meld.tiles.length - 1) {
+                    tileElement.classList.add('called');
+                }
+                
+                tileElement.textContent = tile.displayName || tile.unicode;
+                meldGroup.appendChild(tileElement);
+            });
+            
+            return meldGroup;
         }
 
         function toggleDebug() {
             debugMode = !debugMode;
             showNotification(debugMode ? 'デバッグモードON' : 'デバッグモードOFF', 'info');
+        }
+
+        // CPU自動対戦モード切り替え
+        let cpuAutoMode = false;
+        function toggleCpuAuto() {
+            if (!gameId) {
+                showNotification('ゲームが開始されていません', 'error');
+                return;
+            }
+
+            cpuAutoMode = !cpuAutoMode;
+            const btn = document.getElementById('cpuAutoBtn');
+            
+            if (cpuAutoMode) {
+                btn.textContent = 'CPU自動停止';
+                btn.className = 'btn btn-danger';
+                showNotification('🤖 CPU自動対戦モード開始', 'success');
+                
+                // サーバーにCPU自動モード開始を通知
+                fetch(`/api/game/${gameId}/cpu-auto`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        enabled: true,
+                        speed: 400
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'OK') {
+                        console.log('✅ CPU自動対戦開始:', data.message);
+                        // 定期的にゲーム状態を更新
+                        startCpuAutoMonitoring();
+                    } else {
+                        throw new Error(data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ CPU自動対戦開始エラー:', error);
+                    showNotification('CPU自動対戦開始失敗: ' + error.message, 'error');
+                    // ボタンを元に戻す
+                    cpuAutoMode = false;
+                    btn.textContent = 'CPU自動開始';
+                    btn.className = 'btn btn-success';
+                });
+            } else {
+                btn.textContent = 'CPU自動開始';
+                btn.className = 'btn btn-success';
+                showNotification('🛑 CPU自動対戦モード停止', 'warning');
+                
+                // サーバーにCPU自動モード停止を通知
+                fetch(`/api/game/${gameId}/cpu-auto`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        enabled: false
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('🛑 CPU自動対戦停止:', data.message);
+                    stopCpuAutoMonitoring();
+                })
+                .catch(error => {
+                    console.error('❌ CPU自動対戦停止エラー:', error);
+                });
+            }
+        }
+
+        // CPU自動対戦モード監視
+        let cpuAutoInterval = null;
+        function startCpuAutoMonitoring() {
+            if (cpuAutoInterval) clearInterval(cpuAutoInterval);
+            
+            cpuAutoInterval = setInterval(() => {
+                if (cpuAutoMode && gameId) {
+                    requestGameState();
+                }
+            }, 2000); // 2秒ごとに状態確認
+        }
+
+        function stopCpuAutoMonitoring() {
+            if (cpuAutoInterval) {
+                clearInterval(cpuAutoInterval);
+                cpuAutoInterval = null;
+            }
         }
 
         // デバッグ関数群
@@ -1328,10 +2288,158 @@
             }
             showNotification('捨て牌情報をコンソールに表示', 'info');
         }
+        
+        // サーバーエラーログ表示
+        async function showErrorLogs() {
+            try {
+                const response = await fetch('/api/logs/error');
+                const result = await response.json();
+                
+                if (result.status === 'OK') {
+                    console.log('📋 サーバーエラーログ (最新50行):');
+                    console.log('=' .repeat(60));
+                    console.log(result.logs || 'エラーログはありません');
+                    console.log('=' .repeat(60));
+                    showNotification('エラーログをコンソールに表示しました', 'info');
+                } else {
+                    console.error('エラーログ取得失敗:', result.message);
+                    showNotification('エラーログの取得に失敗しました', 'error');
+                }
+            } catch (error) {
+                console.error('エラーログ取得エラー:', error);
+                showNotification('エラーログの取得でエラーが発生しました', 'error');
+            }
+        }
 
         function clearConsole() {
             console.clear();
             showNotification('コンソールをクリアしました', 'info');
+        }
+
+        // 捨て牌座標テスト機能
+        function testDiscardCoordinates() {
+            console.log('🎯 捨て牌座標テスト開始');
+            
+            if (!gameState || !gameState.players) {
+                showNotification('ゲーム状態が無効です', 'error');
+                return;
+            }
+            
+            // 各プレイヤーの捨て牌エリアの座標を確認
+            for (let i = 0; i < 4; i++) {
+                const discardElement = document.getElementById(`discards${i}`);
+                if (discardElement) {
+                    const rect = discardElement.getBoundingClientRect();
+                    const style = window.getComputedStyle(discardElement);
+                    
+                    console.log(`📍 プレイヤー${i} 捨て牌エリア座標:`);
+                    console.log(`  - 位置: x=${rect.left.toFixed(1)}, y=${rect.top.toFixed(1)}`);
+                    console.log(`  - サイズ: width=${rect.width.toFixed(1)}, height=${rect.height.toFixed(1)}`);
+                    console.log(`  - CSS: position=${style.position}, transform=${style.transform}`);
+                    console.log(`  - 捨て牌数: ${gameState.players[i].hand.discards.length}枚`);
+                    
+                    // 捨て牌の配置方向をテスト
+                    const discards = discardElement.children;
+                    if (discards.length > 0) {
+                        console.log(`  - 最初の牌位置: x=${discards[0].getBoundingClientRect().left.toFixed(1)}`);
+                        if (discards.length > 1) {
+                            console.log(`  - 最後の牌位置: x=${discards[discards.length-1].getBoundingClientRect().left.toFixed(1)}`);
+                            console.log(`  - 配置方向: ${discards[0].getBoundingClientRect().left < discards[discards.length-1].getBoundingClientRect().left ? '左→右' : '右→左'}`);
+                        }
+                    }
+                    
+                    // 視覚的テスト用の一時的ハイライト
+                    discardElement.style.border = '3px solid red';
+                    setTimeout(() => {
+                        discardElement.style.border = '';
+                    }, 2000);
+                }
+            }
+            
+            // 捨て牌の向きと配置パターンをテスト
+            testDiscardRotations();
+            showNotification('捨て牌座標をコンソールに出力しました', 'info');
+        }
+        
+        // 捨て牌の回転と配置テスト
+        function testDiscardRotations() {
+            console.log('🔄 捨て牌回転テスト:');
+            
+            for (let i = 0; i < 4; i++) {
+                const playerName = ['プレイヤー1', 'CPU南', 'CPU西', 'CPU北'][i];
+                const expectedRotation = [0, 0, 180, 0][i]; // 期待される回転角度
+                const expectedDirection = ['左→右', '上→下', '右→左', '下→上'][i]; // 期待される配置方向
+                
+                console.log(`  ${playerName} (位置${i}):`);
+                console.log(`    - 期待回転: ${expectedRotation}度`);
+                console.log(`    - 期待配置: ${expectedDirection}`);
+                
+                const discardElement = document.getElementById(`discards${i}`);
+                if (discardElement && discardElement.children.length > 0) {
+                    const firstTile = discardElement.children[0];
+                    const style = window.getComputedStyle(firstTile);
+                    console.log(`    - 実際CSS: transform=${style.transform}`);
+                }
+            }
+        }
+        
+        // 捨て牌エリアのクリック可能テスト
+        function addDiscardClickTest() {
+            for (let i = 0; i < 4; i++) {
+                const discardElement = document.getElementById(`discards${i}`);
+                if (discardElement) {
+                    discardElement.addEventListener('click', function() {
+                        console.log(`🖱️ プレイヤー${i}の捨て牌エリアがクリックされました`);
+                        showNotification(`プレイヤー${i}の捨て牌エリア`, 'info');
+                        
+                        // 詳細な捨て牌情報を表示
+                        showDiscardDetails(i);
+                    });
+                }
+            }
+        }
+        
+        // 指定プレイヤーの捨て牌詳細表示
+        function showDiscardDetails(playerIndex) {
+            if (!gameState || !gameState.players[playerIndex]) return;
+            
+            const player = gameState.players[playerIndex];
+            const discards = player.hand.discards;
+            
+            console.log(`📋 プレイヤー${playerIndex} 捨て牌詳細:`);
+            console.log(`  - 総数: ${discards.length}枚`);
+            
+            discards.forEach((tile, index) => {
+                console.log(`  ${index + 1}. ${tile.displayName || tile.unicode} (ID: ${tile.id})`);
+            });
+            
+            if (gameState.lastDiscard && gameState.lastDiscardPlayer === playerIndex) {
+                console.log(`  ⭐ 最新捨て牌: ${gameState.lastDiscard.displayName || gameState.lastDiscard.unicode}`);
+            }
+        }
+        
+        // 捨て牌更新の監視（updateGameDisplayから呼び出し）
+        function trackDiscardUpdates() {
+            if (!gameState) return;
+            
+            const currentDiscardCounts = gameState.players.map(p => p.hand.discards.length);
+            
+            // 前回と比較して変更があった場合
+            if (window.lastDiscardCounts) {
+                for (let i = 0; i < 4; i++) {
+                    if (currentDiscardCounts[i] !== window.lastDiscardCounts[i]) {
+                        const change = currentDiscardCounts[i] - window.lastDiscardCounts[i];
+                        console.log(`🔄 プレイヤー${i} 捨て牌変更: ${window.lastDiscardCounts[i]}枚 → ${currentDiscardCounts[i]}枚 (${change > 0 ? '+' : ''}${change})`);
+                        
+                        if (change > 0 && gameState.players[i].hand.discards.length > 0) {
+                            const latestDiscard = gameState.players[i].hand.discards[gameState.players[i].hand.discards.length - 1];
+                            console.log(`  新しい捨て牌: ${latestDiscard.displayName || latestDiscard.unicode}`);
+                        }
+                    }
+                }
+            }
+            
+            window.lastDiscardCounts = [...currentDiscardCounts];
         }
 
         // 通知表示
@@ -1356,12 +2464,13 @@
             if (e.key === 'q' || e.key === 'Q') toggleDebug();
         });
 
-        // 自動更新（10秒ごと）
+        // Socket.IOによるリアルタイム通信を使用するため、定期ポーリングは不要
+        // ただし、接続確認のために60秒ごとにpingを送信
         setInterval(() => {
-            if (gameId) {
-                requestGameState();
+            if (isConnected) {
+                socket.emit('ping');
             }
-        }, 10000);
+        }, 60000);
     </script>
 </body>
 </html>

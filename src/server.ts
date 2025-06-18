@@ -1,11 +1,35 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
 import { TileManager } from './models/TileManager';
 import { GameManager } from './models/GameManager';
 import { GameSessionManager } from './models/GameSession';
 import { GameRecordManager } from './models/GameRecord';
+
+// ログディレクトリ確保
+const logsDir = path.join(__dirname, '../logs');
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
+
+// ログ関数
+function logError(message: string, error?: any) {
+  const timestamp = new Date().toISOString();
+  const logMessage = `[${timestamp}] ERROR: ${message}${error ? '\n' + JSON.stringify(error, null, 2) : ''}\n`;
+  
+  console.error(logMessage);
+  fs.appendFileSync(path.join(logsDir, 'error.log'), logMessage);
+}
+
+function logInfo(message: string, data?: any) {
+  const timestamp = new Date().toISOString();
+  const logMessage = `[${timestamp}] INFO: ${message}${data ? '\n' + JSON.stringify(data, null, 2) : ''}\n`;
+  
+  console.log(logMessage);
+  fs.appendFileSync(path.join(logsDir, 'info.log'), logMessage);
+}
 
 const app = express();
 const server = createServer(app);
@@ -153,6 +177,7 @@ app.get('/api/game/test', (_req, res) => {
       },
     });
   } catch (error) {
+    logError('ゲーム管理システムエラー', error);
     res.status(500).json({
       status: 'Error',
       message: 'ゲーム管理システムエラー',
@@ -210,6 +235,7 @@ app.get('/api/game/:gameId', (req, res) => {
       },
     });
   } catch (error) {
+    logError('ゲーム状態取得エラー', error);
     return res.status(500).json({
       status: 'Error',
       message: 'ゲーム状態取得エラー',
@@ -443,6 +469,7 @@ app.post('/api/game/:gameId/action', (req, res) => {
       },
     });
   } catch (error) {
+    logError('アクション処理エラー', { gameId: req.params.gameId, action: req.body, error });
     return res.status(500).json({
       status: 'Error',
       message: 'アクション処理エラー',
@@ -611,6 +638,42 @@ io.on('connection', socket => {
         playerId: action.playerId,
         data: action.data
       });
+      
+      // CPU自動ターンをスケジュール（Socket.IO版でも必要）
+      setTimeout(() => {
+        try {
+          const updatedGameState = game.getGameState();
+          const currentPlayer = updatedGameState.players[updatedGameState.currentPlayer];
+          
+          if (currentPlayer && currentPlayer.isBot) {
+            console.log(`🤖 CPU自動ターンスケジュール: ${currentPlayer.name} (Position ${updatedGameState.currentPlayer})`);
+            
+            // CPU処理を実行
+            const cpuActions = game.executeAIAction();
+            console.log(`🤖 CPU実行結果: ${cpuActions.length}個のアクション`);
+            
+            // CPU処理後にSocket.IOで状態更新を送信
+            if (cpuActions.length > 0) {
+              io.to(roomId).emit('gameUpdate', game.getGameState());
+              console.log(`📡 CPU処理後の状態をSocket.IOで送信`);
+            }
+            
+            // 次のCPUプレイヤーがいる場合は再帰的にスケジュール
+            const nextGameState = game.getGameState();
+            const nextPlayer = nextGameState.players[nextGameState.currentPlayer];
+            if (nextPlayer && nextPlayer.isBot) {
+              setTimeout(() => {
+                const recursiveActions = game.executeAIAction();
+                if (recursiveActions.length > 0) {
+                  io.to(roomId).emit('gameUpdate', game.getGameState());
+                }
+              }, 2000);
+            }
+          }
+        } catch (error) {
+          console.error('🤖 CPU処理エラー:', error);
+        }
+      }, 2000); // 2秒後に実行
     } catch (error) {
       socket.emit('error', {
         code: 'ACTION_ERROR',
@@ -766,6 +829,42 @@ app.delete('/api/stats/clear', (req, res) => {
   }
 });
 
+// CPU自動対戦モードAPI
+app.post('/api/game/:gameId/cpu-auto', (req, res) => {
+  try {
+    const { gameId } = req.params;
+    const { enabled = true, speed = 300 } = req.body;
+    
+    const game = gameSessionManager.getGame(gameId);
+    if (!game) {
+      return res.status(404).json({
+        status: 'Error',
+        message: 'ゲームが見つかりません',
+      });
+    }
+
+    // CPU自動モードを設定
+    (game as any).setCpuAutoMode(enabled, speed);
+    
+    return res.json({
+      status: 'OK',
+      message: `CPU自動対戦モード${enabled ? '開始' : '停止'}しました`,
+      data: {
+        gameId,
+        cpuAutoMode: enabled,
+        gameSpeed: speed,
+        message: enabled ? 'CPU同士の対戦が開始されました。ブラウザのコンソールでログを確認してください。' : 'CPU自動対戦を停止しました。'
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'Error',
+      message: 'CPU自動対戦モード設定エラー',
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+});
+
 // ルートパスのリダイレクト
 app.get('/', (req, res) => {
   res.redirect('/title.html');
@@ -774,6 +873,59 @@ app.get('/', (req, res) => {
 // ホームページのリダイレクト（後方互換性）
 app.get('/home', (req, res) => {
   res.redirect('/home.html');
+});
+
+// ログ確認API
+app.get('/api/logs/error', (_req, res) => {
+  try {
+    const errorLogPath = path.join(logsDir, 'error.log');
+    if (fs.existsSync(errorLogPath)) {
+      const logs = fs.readFileSync(errorLogPath, 'utf8').split('\n').slice(-50).join('\n');
+      res.json({
+        status: 'OK',
+        message: '最新50行のエラーログ',
+        logs: logs
+      });
+    } else {
+      res.json({
+        status: 'OK',
+        message: 'エラーログなし',
+        logs: ''
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      status: 'Error',
+      message: 'ログ読み込みエラー',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+app.get('/api/logs/info', (_req, res) => {
+  try {
+    const infoLogPath = path.join(logsDir, 'info.log');
+    if (fs.existsSync(infoLogPath)) {
+      const logs = fs.readFileSync(infoLogPath, 'utf8').split('\n').slice(-50).join('\n');
+      res.json({
+        status: 'OK',
+        message: '最新50行の情報ログ',
+        logs: logs
+      });
+    } else {
+      res.json({
+        status: 'OK',
+        message: '情報ログなし',
+        logs: ''
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      status: 'Error',
+      message: 'ログ読み込みエラー',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
 });
 
 // 404エラーハンドリング
@@ -786,8 +938,17 @@ app.use('*', (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`🀄 麻雀ゲームサーバーがポート ${PORT} で起動しました`);
+  const startupMessage = `🀄 麻雀ゲームサーバーがポート ${PORT} で起動しました`;
+  logInfo('サーバー起動', {
+    port: PORT,
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  });
+  
+  console.log(startupMessage);
   console.log(`🌐 http://localhost:${PORT} でアクセスできます`);
   console.log(`📊 ヘルスチェック: http://localhost:${PORT}/api/health`);
   console.log(`🔌 Socket.IO準備完了`);
+  console.log(`📝 ログファイル: ${path.join(logsDir, 'error.log')}`);
+  console.log(`📝 情報ログ: ${path.join(logsDir, 'info.log')}`);
 });

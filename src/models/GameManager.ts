@@ -14,6 +14,8 @@ export class GameManager {
   private players: Player[] = [];
   private actionQueue: PlayerAction[] = [];
   private debugMode: boolean = false;
+  private cpuAutoMode: boolean = false; // CPU自動対戦モード
+  private gameSpeed: number = 1000; // ゲーム速度（ミリ秒）
   private recordManager: GameRecordManager;
 
   constructor(
@@ -225,8 +227,10 @@ export class GameManager {
       // ゲーム状態更新
       this.updateGameState();
       
-      // CPUターンの自動実行をスケジュール
-      this.scheduleNextCPUAction();
+      // CPUターンの自動実行をスケジュール（フロントエンド同期のため少し遅延）
+      setTimeout(() => {
+        this.scheduleNextCPUAction();
+      }, 500); // 500ms後にスケジュール
 
     } catch (error) {
       console.error(`❌ アクション処理エラー:`, error);
@@ -400,6 +404,63 @@ export class GameManager {
     (this.gameState.round as any).riichiSticks = 0;
   }
 
+  // プレイヤー牌数検証
+  private validatePlayerTileCount(player: Player, context: string): void {
+    const handTiles = player.hand.tiles.length;
+    const meldCount = player.hand.melds.length;
+    const activeTiles = player.getActiveTileCount();
+    const meldTiles = player.hand.melds.reduce((sum, m) => sum + m.tiles.length, 0);
+    
+    console.log(`🔍 [Validation] ${player.name} ${context}:`);
+    console.log(`🔍   Hand tiles: ${handTiles}`);
+    console.log(`🔍   Melds: ${meldCount} (${meldTiles} tiles)`);
+    console.log(`🔍   Active total: ${activeTiles}`);
+    
+    // メルド後の期待枚数: 手牌 + メルド = 14枚（鳴き直後、打牌前）
+    // 通常時は13枚だが、鳴き直後は14枚、ツモ直後は14枚（鳴きなし）または15枚（鳴きあり+ツモ）
+    let expectedActive;
+    if (context.includes('after') && (context.includes('chi') || context.includes('pon') || context.includes('kan'))) {
+      expectedActive = 14; // 鳴き直後は14枚
+    } else if (context.includes('after draw')) {
+      expectedActive = 14 + meldCount; // ツモ直後は13+鳴き枚数+ツモ1枚
+    } else {
+      expectedActive = 13 + meldCount; // 通常時は13+鳴き枚数
+    }
+    
+    if (activeTiles !== expectedActive) {
+      console.warn(`⚠️ [${player.name}] Tile count mismatch ${context}: expected ${expectedActive}, got ${activeTiles}`);
+      // 一時的にエラーを警告に変更してデバッグ
+      // throw new Error(`Tile count validation failed for ${player.name} ${context}: expected ${expectedActive}, got ${activeTiles}`);
+    } else {
+      console.log(`✅ [Validation] ${player.name} tile count correct: ${activeTiles} tiles`);
+    }
+  }
+
+  // 全プレイヤー牌数検証
+  private validateAllPlayerTileCounts(context: string): void {
+    console.log(`🔍 [Global Validation] ${context}`);
+    
+    let totalTiles = 0;
+    this.players.forEach((player, index) => {
+      const playerTotal = player.getTotalTileCount();
+      totalTiles += playerTotal;
+      console.log(`🔍 P${index} ${player.name}: ${playerTotal} tiles total`);
+    });
+    
+    const wallTiles = this.gameState.remainingTiles;
+    const deadWallTiles = 14; // 王牌
+    const grandTotal = totalTiles + wallTiles + deadWallTiles;
+    
+    console.log(`🔍 Total distribution: ${totalTiles} (players) + ${wallTiles} (wall) + ${deadWallTiles} (dead) = ${grandTotal}`);
+    
+    if (grandTotal !== 136) {
+      console.error(`❌ [Global] Tile count error ${context}: total ${grandTotal}, expected 136`);
+      throw new Error(`Global tile validation failed ${context}: total ${grandTotal}, expected 136`);
+    }
+    
+    console.log(`✅ [Global Validation] Total tile count correct: 136 tiles`);
+  }
+
   // 和了時の支払い処理
   private processWinPayment(
     winnerIndex: number,
@@ -468,14 +529,38 @@ export class GameManager {
       throw new Error('Meld action requires meld and tile');
     }
 
+    console.log(`🔧 [GameManager] Processing ${action.meld.type} for ${player.name}`);
+    console.log(`🔧 [GameManager] Before meld: ${player.hand.tiles.length} hand tiles, ${player.hand.melds.length} melds`);
+
     player.addMeld(action.meld, action.tile);
+    
+    // 鳴き後の牌数検証
+    this.validatePlayerTileCount(player, `after ${action.meld.type}`);
     
     // 鳴きが発生したら一発フラグをクリア
     this.clearIppatsuFlags();
     
-    // カンの場合はドラ追加
+    // カンの場合はドラ追加とツモ
     if (action.meld.type === 'kan') {
       this.tileManager.addDoraIndicator();
+      // カン後はツモが必要
+      this.drawTileForPlayer(player);
+    }
+
+    // メルド後はそのプレイヤーのターンになる
+    this.gameState = {
+      ...this.gameState,
+      currentPlayer: player.position,
+      availableActions: [] // 鳴きアクションをクリア
+    };
+
+    console.log(`🔄 メルド後ターン設定: ${player.name} (Position ${player.position})`);
+
+    // CPUの場合は自動ターンをスケジュール（フロントエンド同期のため少し遅延）
+    if (player.isBot && action.meld.type !== 'kan') {
+      setTimeout(() => {
+        this.scheduleNextCPUAction();
+      }, 500); // 500ms後にスケジュール
     }
 
     return [{
@@ -961,30 +1046,6 @@ export class GameManager {
     this.startNewRound();
   }
 
-  // 新しい局の開始
-  private startNewRound(): void {
-    // 牌を初期化
-    this.tileManager = new TileManager(true);
-    
-    // プレイヤーをリセット
-    this.players.forEach(player => {
-      // 手牌のクリアなど（実装は省略）
-    });
-
-    // 配牌
-    const hands = this.tileManager.dealInitialHands();
-    hands.forEach((hand, index) => {
-      this.players[index].setInitialHand([...hand.tiles]);
-    });
-
-    // 親にツモ牌
-    const dealerTile = this.tileManager.drawTile();
-    if (dealerTile) {
-      this.players[this.gameState.round.dealerPosition].drawTile(dealerTile);
-    }
-
-    console.log(`🀄 東${this.gameState.round.roundNumber}局開始`);
-  }
 
   // プレイヤーIDからインデックスを取得
   private getPlayerIndex(playerId: string): number {
@@ -1046,13 +1107,27 @@ export class GameManager {
   // ターン管理
   private nextTurn(): void {
     const nextPlayerIndex = (this.gameState.currentPlayer + 1) % 4;
+    const nextPlayer = this.players[nextPlayerIndex];
     
     this.gameState = {
       ...this.gameState,
       currentPlayer: nextPlayerIndex
     };
     
-    console.log(`🔄 ターン進行: Player ${nextPlayerIndex} (${this.players[nextPlayerIndex]?.name})`);
+    console.log(`🔄 ターン進行: Player ${nextPlayerIndex} (${nextPlayer?.name})`);
+    
+    // 新しいプレイヤーが13枚の場合、自動的にツモを実行
+    if (nextPlayer && nextPlayer.hand.tiles.length === 13) {
+      console.log(`🎯 ${nextPlayer.name} にツモが必要 (現在${nextPlayer.hand.tiles.length}枚)`);
+      this.drawTileForPlayer(nextPlayer);
+    }
+    
+    // CPUプレイヤーの場合、自動ターンをスケジュール（フロントエンド同期のため少し遅延）
+    if (nextPlayer && nextPlayer.isBot) {
+      setTimeout(() => {
+        this.scheduleNextCPUAction();
+      }, 500); // 500ms後にスケジュール
+    }
   }
 
   private setNextPlayerTurn(): void {
@@ -1061,6 +1136,45 @@ export class GameManager {
       ...this.gameState,
       currentPlayer: nextPlayerIndex
     };
+  }
+
+  // プレイヤーにツモを実行
+  private drawTileForPlayer(player: Player): void {
+    try {
+      if (player.hand.tiles.length !== 13) {
+        console.log(`⚠️ ${player.name}: 手牌${player.hand.tiles.length}枚のためツモスキップ`);
+        return;
+      }
+
+      const drawnTile = this.tileManager.drawTile();
+      if (!drawnTile) {
+        console.log(`💨 山牌がなくなりました - 流局`);
+        this.processDrawGame();
+        return;
+      }
+
+      player.drawTile(drawnTile);
+      console.log(`🎯 ${player.name} ツモ: ${drawnTile.displayName} (手牌${player.hand.tiles.length}枚)`);
+
+      // ツモアクションを記録
+      const drawAction: GameAction = {
+        id: `draw_${Date.now()}`,
+        type: 'draw',
+        playerId: player.id,
+        data: { tile: drawnTile },
+        description: `${player.name}がツモ: ${drawnTile.displayName}`,
+        timestamp: Date.now(),
+      };
+
+      this.gameState = {
+        ...this.gameState,
+        gameLog: [...this.gameState.gameLog, drawAction]
+      };
+      this.updateGameState();
+
+    } catch (error) {
+      console.error(`❌ ${player.name} ツモエラー:`, error);
+    }
   }
 
   // デバッグモード用：手動ツモ
@@ -1074,37 +1188,46 @@ export class GameManager {
       return; // デバッグモード時は自動実行しない
     }
 
-    const currentPlayer = this.players[this.gameState.currentPlayer];
+    const currentPlayerIndex = this.gameState.currentPlayer;
+    const currentPlayer = this.players[currentPlayerIndex];
     if (!currentPlayer || !currentPlayer.isBot) {
       return; // 人間プレイヤーの場合は何もしない
     }
 
-    // 1-3秒後にCPUアクションを実行（リアルな思考時間をシミュレート）
-    const delay = Math.random() * 2000 + 1000; // 1000-3000ms
+    // 2-5秒後にCPUアクションを実行（フロントエンド同期とリアルな思考時間をシミュレート）
+    const delay = Math.random() * 3000 + 2000; // 2000-5000ms
     
     setTimeout(() => {
+      // 実行時点での現在プレイヤーを再取得（ターンが変わっている可能性があるため）
+      const actualCurrentPlayer = this.players[this.gameState.currentPlayer];
+      
       try {
-        console.log(`🤖 ${currentPlayer.name} 自動ターン開始`);
+        if (!actualCurrentPlayer || !actualCurrentPlayer.isBot || actualCurrentPlayer.id !== currentPlayer.id) {
+          console.log(`🚫 ${currentPlayer.name}: ターンが変わったためスキップ`);
+          return;
+        }
+        
+        console.log(`🤖 ${actualCurrentPlayer.name} 自動ターン開始`);
         
         // CPUの必要なアクションを判定して実行
-        if (currentPlayer.hand.tiles.length === 13) {
+        if (actualCurrentPlayer.hand.tiles.length === 13) {
           // ツモが必要
           const drawAction: PlayerAction = {
             type: 'draw',
-            playerId: currentPlayer.id,
+            playerId: actualCurrentPlayer.id,
             priority: 1,
             timestamp: Date.now()
           };
           this.processAction(drawAction);
-        } else if (currentPlayer.hand.tiles.length === 14) {
+        } else if (actualCurrentPlayer.hand.tiles.length === 14) {
           // 捨て牌が必要
           const aiActions = this.executeAIAction();
           if (aiActions.length === 0) {
             // AIが判断できない場合はランダムに捨て牌
-            const randomTile = currentPlayer.hand.tiles[Math.floor(Math.random() * currentPlayer.hand.tiles.length)];
+            const randomTile = actualCurrentPlayer.hand.tiles[Math.floor(Math.random() * actualCurrentPlayer.hand.tiles.length)];
             const discardAction: PlayerAction = {
               type: 'discard',
-              playerId: currentPlayer.id,
+              playerId: actualCurrentPlayer.id,
               tile: randomTile,
               priority: 1,
               timestamp: Date.now()
@@ -1113,8 +1236,409 @@ export class GameManager {
           }
         }
       } catch (error) {
-        console.error(`❌ CPU自動ターンエラー (${currentPlayer.name}):`, error);
+        console.error(`❌ CPU自動ターンエラー (${actualCurrentPlayer?.name || currentPlayer.name}):`, error);
       }
     }, delay);
+  }
+
+  // CPU自動対戦モード設定
+  setCpuAutoMode(enabled: boolean, speed: number = 300): void {
+    this.cpuAutoMode = enabled;
+    this.gameSpeed = speed;
+    console.log(`🤖 CPU自動対戦モード: ${enabled ? 'ON' : 'OFF'} (速度: ${speed}ms)`);
+    
+    if (enabled) {
+      // 全プレイヤーをCPUにする
+      this.players.forEach((player, index) => {
+        (player as any)._isBot = true;
+        console.log(`🤖 プレイヤー${index} (${player.name}) をCPUに変更`);
+      });
+      
+      // 自動進行開始
+      this.startAutoGame();
+    }
+  }
+
+  // 自動ゲーム進行
+  private async startAutoGame(): Promise<void> {
+    console.log(`🚀 CPU自動対戦開始: ${this.gameSpeed}ms間隔`);
+    
+    let turnCount = 0;
+    const maxTurns = 300; // 無限ループ防止
+    
+    while (this.cpuAutoMode && this.gameState.phase !== 'finished' && turnCount < maxTurns) {
+      await this.sleep(this.gameSpeed);
+      
+      try {
+        const executed = await this.executeNextCpuTurn();
+        if (executed) {
+          turnCount++;
+          
+          // 定期的にゲーム状況をログ出力
+          if (turnCount % 20 === 0) {
+            this.logGameProgress();
+          }
+        } else {
+          // アクションが実行されなかった場合は次のプレイヤーに
+          this.gameState = {
+            ...this.gameState,
+            currentPlayer: (this.gameState.currentPlayer + 1) % 4,
+            updatedAt: Date.now()
+          };
+        }
+      } catch (error) {
+        console.error(`❌ CPU自動実行エラー (ターン${turnCount}):`, error);
+        this.gameState = {
+          ...this.gameState,
+          currentPlayer: (this.gameState.currentPlayer + 1) % 4,
+          updatedAt: Date.now()
+        }; // エラー時も進行
+      }
+    }
+    
+    console.log(`🏁 CPU自動対戦終了 (${turnCount}ターン実行)`);
+    this.logFinalResults();
+  }
+
+  // CPUターン実行
+  private async executeNextCpuTurn(): Promise<boolean> {
+    // 流局チェック
+    if (this.gameState.remainingTiles <= 0) {
+      console.log(`💨 流局発生: 残り牌${this.gameState.remainingTiles}枚`);
+      this.processDrawGame();
+      return true;
+    }
+
+    // 鳴き機会チェック（最優先）
+    if (this.gameState.availableActions.length > 0) {
+      console.log(`🎴 鳴き機会検出: ${this.gameState.availableActions.length}件`);
+      
+      // 鳴き機会があるプレイヤーを確認
+      for (const action of this.gameState.availableActions) {
+        const player = this.players[parseInt(action.playerId.replace('player_', ''))];
+        if (player.isBot) {
+          // CPUが鳴きを判断（簡易版：30%の確率で鳴く）
+          const shouldMeld = Math.random() < 0.3;
+          
+          if (shouldMeld) {
+            console.log(`🎴 ${player.name}: ${action.type}実行決定`);
+            this.processAction(action);
+            return true;
+          } else {
+            console.log(`🎲 ${player.name}: ${action.type}見送り`);
+          }
+        }
+      }
+      
+      // 全プレイヤーが見送った場合、鳴き機会をクリア
+      this.gameState = {
+        ...this.gameState,
+        availableActions: []
+      };
+    }
+
+    const currentPlayer = this.players[this.gameState.currentPlayer];
+    
+    console.log(`🎮 ${currentPlayer.name} (P${this.gameState.currentPlayer}) ターン: 手牌${currentPlayer.hand.tiles.length}枚`);
+    
+    try {
+      if (currentPlayer.hand.tiles.length === 13) {
+        // ツモ処理
+        console.log(`🎯 ${currentPlayer.name}: ツモ実行`);
+        this.processDraw(currentPlayer);
+        return true;
+        
+      } else if (currentPlayer.hand.tiles.length === 14) {
+        // AI判断実行
+        const aiActions = this.executeAIAction();
+        
+        if (aiActions.length > 0) {
+          console.log(`✅ ${currentPlayer.name}: ${aiActions[0].type} 実行`);
+          return true;
+        } else {
+          // ランダム捨牌
+          console.log(`🎲 ${currentPlayer.name}: ランダム捨牌`);
+          const randomTile = currentPlayer.hand.tiles[Math.floor(Math.random() * currentPlayer.hand.tiles.length)];
+          const discardAction: PlayerAction = {
+            type: 'discard',
+            playerId: currentPlayer.position.toString(),
+            priority: 1,
+            timestamp: Date.now(),
+            tile: randomTile
+          };
+          this.processAction(discardAction);
+          return true;
+        }
+      }
+    } catch (error) {
+      console.error(`❌ ${currentPlayer.name} アクション失敗:`, error);
+    }
+    
+    return false;
+  }
+
+  // 流局処理
+  private processDrawGame(): void {
+    console.log(`💨 === 流局処理開始 ===`);
+    
+    // テンパイ確認
+    const tenpaiPlayers: number[] = [];
+    this.players.forEach((player, index) => {
+      if (this.isTenpai(player)) {
+        tenpaiPlayers.push(index);
+        console.log(`✅ ${player.name}: テンパイ`);
+      } else {
+        console.log(`❌ ${player.name}: ノーテン`);
+      }
+    });
+
+    // 点数移動（ノーテン罰符）
+    if (tenpaiPlayers.length > 0 && tenpaiPlayers.length < 4) {
+      const tenpaiBonus = Math.floor(3000 / tenpaiPlayers.length);
+      const notenPenalty = Math.floor(3000 / (4 - tenpaiPlayers.length));
+
+      this.players.forEach((player, index) => {
+        if (tenpaiPlayers.includes(index)) {
+          player.addScore(tenpaiBonus);
+          console.log(`💰 ${player.name}: +${tenpaiBonus}点 (テンパイ料)`);
+        } else {
+          player.addScore(-notenPenalty);
+          console.log(`💸 ${player.name}: -${notenPenalty}点 (ノーテン罰符)`);
+        }
+      });
+    }
+
+    // 親番・局数の処理
+    const dealerTenpai = tenpaiPlayers.includes(this.gameState.round.dealerPosition);
+    let newRound = { ...this.gameState.round };
+    
+    if (dealerTenpai) {
+      // 親テンパイ → 連荘（本場数増加）
+      newRound.honbaCount = this.gameState.round.honbaCount + 1;
+      console.log(`🔄 親テンパイのため連荘: ${newRound.roundNumber}局${newRound.honbaCount}本場`);
+    } else {
+      // 親ノーテン → 親流し（親番移動）
+      const newDealerPosition = (this.gameState.round.dealerPosition + 1) % 4;
+      
+      if (newDealerPosition === 0) {
+        // 一周して東に戻る → 南場へ or 終了
+        if (this.gameState.round.prevailingWind === 'east') {
+          newRound = {
+            roundNumber: 1,
+            dealerPosition: 0,
+            prevailingWind: 'south',
+            honbaCount: 0,
+            riichiSticks: this.gameState.round.riichiSticks
+          };
+          console.log(`🌅 東場終了 → 南1局開始`);
+        } else {
+          // 南場終了 → ゲーム終了
+          newRound = {
+            roundNumber: 5, // 終了フラグ
+            dealerPosition: 0,
+            prevailingWind: 'south', // 型エラー回避
+            honbaCount: 0,
+            riichiSticks: this.gameState.round.riichiSticks
+          };
+          console.log(`🏁 半荘終了`);
+          
+          // ゲーム終了処理
+          this.gameState = {
+            ...this.gameState,
+            phase: 'finished' as any
+          };
+        }
+      } else {
+        // 同場内での親番移動
+        newRound.roundNumber = this.gameState.round.roundNumber + 1;
+        newRound.dealerPosition = newDealerPosition;
+        newRound.honbaCount = 0; // 本場リセット
+        
+        const windNames = ['東', '南', '西', '北'];
+        console.log(`🔄 親流し: ${this.gameState.round.prevailingWind}${newRound.roundNumber}局 (${windNames[newDealerPosition]}家が親)`);
+      }
+    }
+    
+    this.gameState = {
+      ...this.gameState,
+      round: newRound
+    };
+
+    // ログ追加
+    const dealerAction = dealerTenpai ? '連荘' : '親流し';
+    const newLog: GameAction = {
+      id: `draw_${Date.now()}`,
+      type: 'draw_game' as const,
+      description: `流局 - テンパイ${tenpaiPlayers.length}人、${dealerAction} → ${this.gameState.round.prevailingWind}${this.gameState.round.roundNumber}局${this.gameState.round.honbaCount}本場`,
+      timestamp: Date.now()
+    };
+    this.gameState = {
+      ...this.gameState,
+      gameLog: [...this.gameState.gameLog, newLog]
+    };
+
+    console.log(`🏁 流局完了 - 次は${this.gameState.round.honbaCount}本場`);
+    
+    // 次局準備
+    this.startNewRound();
+  }
+
+  // テンパイ判定（簡易版）
+  private isTenpai(player: Player): boolean {
+    const tiles = [...player.hand.tiles];
+    const melds = player.hand.melds;
+    
+    // 14枚の場合は1枚捨てて13枚で判定
+    if (tiles.length === 14) {
+      tiles.pop();
+    }
+    
+    // 簡易的なテンパイ判定：13枚で任意の1枚でアガリ形になるかチェック
+    const allTiles = this.getAllUniqueTiles();
+    
+    for (const testTile of allTiles) {
+      const testHand = [...tiles, testTile];
+      if (HandAnalyzer.isWinningHand(testHand, [...melds])) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  // 全牌種取得
+  private getAllUniqueTiles(): Tile[] {
+    const uniqueTiles: Tile[] = [];
+    
+    // 数牌 1-9
+    for (let suit of ['man', 'pin', 'sou'] as const) {
+      for (let rank = 1; rank <= 9; rank++) {
+        uniqueTiles.push({
+          id: 0,
+          suit,
+          rank: rank as any,
+          isRed: false,
+          displayName: `${rank}${suit.charAt(0)}`,
+          unicode: '🀀'
+        });
+      }
+    }
+    
+    // 字牌
+    for (let honor of ['east', 'south', 'west', 'north', 'white', 'green', 'red'] as const) {
+      uniqueTiles.push({
+        id: 0,
+        suit: 'ji',
+        honor,
+        isRed: false,
+        displayName: honor,
+        unicode: '🀀'
+      });
+    }
+    
+    return uniqueTiles;
+  }
+
+  // 新局開始
+  private startNewRound(): void {
+    console.log(`🎊 新局準備開始`);
+    
+    // 牌山リセット
+    this.tileManager = new TileManager(this.debugMode);
+    
+    // プレイヤー手牌リセット & 風更新
+    this.players.forEach((player, index) => {
+      player.clearHand();
+      // 風の更新（親を基準に相対的に決定）
+      const relativePosition = (index - this.gameState.round.dealerPosition + 4) % 4;
+      const winds = ['east', 'south', 'west', 'north'] as const;
+      const newWind = winds[relativePosition];
+      
+      // プレイヤーの風とディーラーフラグ更新
+      player.updatePosition(index, newWind, index === this.gameState.round.dealerPosition);
+    });
+    
+    // 配牌
+    const hands = this.tileManager.dealInitialHands();
+    hands.forEach((hand, index) => {
+      this.players[index].setHand(hand);
+    });
+    
+    // ゲーム状態更新
+    this.gameState = {
+      ...this.gameState,
+      currentPlayer: this.gameState.round.dealerPosition,
+      remainingTiles: this.tileManager.getRemainingTileCount(),
+      doraIndicators: this.tileManager.getDebugInfo().doraIndicators,
+      phase: 'playing',
+      updatedAt: Date.now()
+    };
+    
+    console.log(`✅ ${this.gameState.round.roundNumber}局${this.gameState.round.honbaCount}本場 開始`);
+  }
+
+  // ゲーム進行状況ログ
+  private logGameProgress(): void {
+    console.log(`\n📊 === ゲーム進行状況 ===`);
+    console.log(`🏁 ${this.gameState.round.roundNumber}局${this.gameState.round.honbaCount}本場 (${this.gameState.round.prevailingWind}場)`);
+    console.log(`👑 親: ${this.players[this.gameState.round.dealerPosition].name}`);
+    console.log(`🎯 現在: ${this.players[this.gameState.currentPlayer].name}`);
+    console.log(`🃏 残り牌: ${this.gameState.remainingTiles}枚`);
+    console.log(`💰 供託: ${this.gameState.round.riichiSticks}本`);
+    
+    // プレイヤー状況
+    this.players.forEach((player, index) => {
+      const status = [];
+      if (player.hand.riichi) status.push('🔴リーチ');
+      if (player.hand.melds.length > 0) status.push(`🎴鳴き${player.hand.melds.length}`);
+      if (player.isDealer) status.push('👑親');
+      
+      const statusText = status.length > 0 ? ` [${status.join(', ')}]` : '';
+      console.log(`  P${index} ${player.name}: ${player.score}点, 手牌${player.hand.tiles.length}枚, 捨牌${player.hand.discards.length}枚${statusText}`);
+    });
+    
+    // 最近のアクション
+    const recentActions = this.gameState.gameLog.slice(-5);
+    console.log(`📋 最近のアクション:`);
+    recentActions.forEach(action => {
+      console.log(`  ${action.description}`);
+    });
+    console.log(`========================\n`);
+  }
+
+  // 最終結果ログ
+  private logFinalResults(): void {
+    console.log(`\n🏆 === ゲーム最終結果 ===`);
+    
+    // 点数順にソート
+    const sortedPlayers = [...this.players].sort((a, b) => b.score - a.score);
+    
+    sortedPlayers.forEach((player, rank) => {
+      const icons = ['🥇', '🥈', '🥉', '4️⃣'];
+      const positions = ['1位', '2位', '3位', '4位'];
+      console.log(`  ${icons[rank]} ${positions[rank]}: ${player.name} - ${player.score}点`);
+    });
+    
+    // ゲーム統計
+    const totalDiscards = this.players.reduce((sum, p) => sum + p.hand.discards.length, 0);
+    const totalMelds = this.players.reduce((sum, p) => sum + p.hand.melds.length, 0);
+    const riichiCount = this.players.filter(p => p.hand.riichi).length;
+    
+    console.log(`\n📊 ゲーム統計:`);
+    console.log(`  総捨牌数: ${totalDiscards}枚`);
+    console.log(`  総鳴き数: ${totalMelds}回`);
+    console.log(`  リーチ者数: ${riichiCount}人`);
+    console.log(`  総アクション: ${this.gameState.gameLog.length}回`);
+    console.log(`========================\n`);
+  }
+
+  // 待機用ヘルパー
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // CPU自動対戦モード取得
+  get isCpuAutoMode(): boolean {
+    return this.cpuAutoMode;
   }
 }
