@@ -117,6 +117,34 @@ function getSuitUnicode(suit, rank) {
   return unicodes[suit][rank - 1];
 }
 
+// 手牌ソート関数
+function sortHand(tiles) {
+  if (!tiles || tiles.length === 0) return tiles;
+  
+  return tiles.sort((a, b) => {
+    // 1. 萬子・筒子・索子・字牌の順序
+    const suitOrder = { 'man': 1, 'pin': 2, 'sou': 3, 'ji': 4 };
+    
+    // 字牌の場合
+    if (a.honor && b.honor) {
+      const honorOrder = { 'east': 1, 'south': 2, 'west': 3, 'north': 4, 'white': 5, 'green': 6, 'red': 7 };
+      return honorOrder[a.honor] - honorOrder[b.honor];
+    }
+    
+    // 一方が字牌、一方が数牌の場合
+    if (a.honor && !b.honor) return 1;
+    if (!a.honor && b.honor) return -1;
+    
+    // 両方数牌の場合
+    if (a.suit !== b.suit) {
+      return suitOrder[a.suit] - suitOrder[b.suit];
+    }
+    
+    // 同じスートの場合は数字順
+    return a.rank - b.rank;
+  });
+}
+
 function getHonorUnicode(honor) {
   const unicodes = {
     east: '🀀', south: '🀁', west: '🀂', north: '🀃',
@@ -160,7 +188,7 @@ function createGameState(gameId) {
       wind: ['east', 'south', 'west', 'north'][i],
       score: 25000,
       hand: {
-        tiles: tiles.splice(0, tileCount),
+        tiles: sortHand(tiles.splice(0, tileCount)),
         discards: [],
         melds: [],
         riichi: false
@@ -221,6 +249,8 @@ io.on('connection', (socket) => {
       if (gameState.wallTiles.length > 0) {
         const drawnTile = gameState.wallTiles.pop();
         gameState.players[gameState.currentPlayer].hand.tiles.push(drawnTile);
+        // 手牌をソート
+        gameState.players[gameState.currentPlayer].hand.tiles = sortHand(gameState.players[gameState.currentPlayer].hand.tiles);
         gameState.remainingTiles = gameState.wallTiles.length;
         
         games.set(socket.gameId, gameState);
@@ -302,6 +332,8 @@ function handleDraw(socket, gameState, data) {
   if (gameState.wallTiles.length > 0) {
     const drawnTile = gameState.wallTiles.pop();
     gameState.players[gameState.currentPlayer].hand.tiles.push(drawnTile);
+    // 手牌をソート
+    gameState.players[gameState.currentPlayer].hand.tiles = sortHand(gameState.players[gameState.currentPlayer].hand.tiles);
     gameState.remainingTiles = gameState.wallTiles.length;
     
     games.set(socket.gameId, gameState);
@@ -346,6 +378,8 @@ function startCpuAutoGame(gameId) {
       if (currentState.wallTiles.length > 0) {
         const drawnTile = currentState.wallTiles.pop();
         currentPlayer.hand.tiles.push(drawnTile);
+        // 手牌をソート
+        currentPlayer.hand.tiles = sortHand(currentPlayer.hand.tiles);
         currentState.remainingTiles = currentState.wallTiles.length;
         console.log(`🎯 プレイヤー${currentState.currentPlayer}がツモ: ${drawnTile.displayName || drawnTile.unicode} (手牌${currentPlayer.hand.tiles.length}枚)`);
         
