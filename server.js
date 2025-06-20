@@ -59,6 +59,31 @@ app.post('/api/game/:gameId/cpu-auto', (req, res) => {
   });
 });
 
+// プレイヤーオートツモ切りAPI
+app.post('/api/game/:gameId/player-auto', (req, res) => {
+  const gameId = req.params.gameId;
+  const { enabled } = req.body;
+  
+  if (!games.has(gameId)) {
+    return res.status(404).json({
+      status: 'Error',
+      message: 'ゲームが見つかりません'
+    });
+  }
+  
+  const gameState = games.get(gameId);
+  gameState.playerAutoTsumoKiri = enabled;
+  
+  games.set(gameId, gameState);
+  
+  res.json({
+    status: 'OK',
+    message: enabled ? 'プレイヤーオートツモ切りを有効にしました' : 'プレイヤーオートツモ切りを無効にしました',
+    gameId,
+    enabled
+  });
+});
+
 // 404エラーハンドリング
 app.use('*', (req, res) => {
   res.status(404).json({
@@ -204,7 +229,8 @@ function createGameState(gameId) {
     wallTiles: tiles,
     round: 1,
     dealer: 0,
-    dora: tiles[0] || null
+    dora: tiles[0] || null,
+    playerAutoTsumoKiri: false // プレイヤーのオートツモ切り設定
   };
 }
 
@@ -406,7 +432,20 @@ function startCpuAutoGame(gameId) {
         console.log(`🤖 [ERROR] CPUの手牌数が異常: ${currentPlayer.hand.tiles.length}枚`);
       }
     } else {
-      console.log(`👤 [DEBUG] 人間プレイヤーのターン（手牌${currentPlayer.hand.tiles.length}枚）- 捨て牌待ち`);
+      // 人間プレイヤーの場合
+      if (currentState.playerAutoTsumoKiri && currentPlayer.hand.tiles.length === 14) {
+        console.log(`👤 [DEBUG] プレイヤーオートツモ切り実行（手牌${currentPlayer.hand.tiles.length}枚）`);
+        // 最後にツモした牌（最後の牌）を自動で捨てる
+        const lastTileIndex = currentPlayer.hand.tiles.length - 1;
+        const tileToDiscard = currentPlayer.hand.tiles[lastTileIndex];
+        
+        // 少し遅延を入れて自然に見せる
+        setTimeout(() => {
+          handleDiscard({ gameId }, currentState, { tileId: tileToDiscard.id });
+        }, 800);
+      } else {
+        console.log(`👤 [DEBUG] 人間プレイヤーのターン（手牌${currentPlayer.hand.tiles.length}枚）- 捨て牌待ち`);
+      }
     }
     
     // 次のターンをスケジュール

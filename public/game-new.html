@@ -950,6 +950,7 @@
             <div class="game-controls">
                 <button class="btn btn-info" onclick="toggleDebug()">デバッグ</button>
                 <button id="cpuAutoBtn" class="btn btn-success" onclick="toggleCpuAuto()">CPU自動開始</button>
+                <button id="playerAutoBtn" class="btn btn-secondary" onclick="togglePlayerAuto()">オートツモ切り</button>
                 <button class="btn btn-warning" onclick="newGame()">新しいゲーム</button>
                 <a href="/title.html" class="btn btn-info">タイトル</a>
             </div>
@@ -1109,6 +1110,7 @@
                 <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="skipToNextPlayer()">次プレイヤー</button>
                 <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="showDiscards()">捨て牌確認</button>
                 <button class="btn" style="background: #17a2b8; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="testDiscardCoordinates()">座標テスト</button>
+                <button class="btn" style="background: #28a745; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="testYakuAnalysis()">役判定テスト</button>
                 <button class="btn" style="background: #dc3545; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="showErrorLogs()">エラーログ</button>
                 <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="clearConsole()">コンソール消去</button>
             </div>
@@ -1135,9 +1137,11 @@
         let lastDiscardedTile = null;
         let lastDiscardedPlayer = null;
         
+        // 変数初期化
+        let isConnected = false;
+        
         // Socket.IO接続
         const socket = io();
-        let isConnected = false;
         
         // Socket.IOイベントハンドリング
         socket.on('connect', () => {
@@ -1156,11 +1160,17 @@
             updateGameDisplay();
         });
         
-        socket.on('roomCreated', (data) => {
-            console.log('🎮 ルーム作成成功:', data);
-            gameId = data.roomId;
-            gameState = data.gameState;
+        socket.on('gameCreated', (data) => {
+            console.log('🎮 ゲーム作成成功:', data);
+            gameId = data.gameId;
+            showNotification('ゲームが作成されました！', 'success');
+        });
+        
+        socket.on('gameState', (newGameState) => {
+            console.log('🎮 ゲーム状態受信:', newGameState);
+            gameState = newGameState;
             updateGameDisplay();
+            showNotification('ゲームが開始されました！', 'success');
         });
         
         socket.on('roomJoined', (data) => {
@@ -2229,6 +2239,73 @@
             }
         }
 
+        // プレイヤーオートツモ切りモード切り替え
+        let playerAutoMode = false;
+        function togglePlayerAuto() {
+            if (!gameId) {
+                showNotification('ゲームが開始されていません', 'error');
+                return;
+            }
+
+            playerAutoMode = !playerAutoMode;
+            const btn = document.getElementById('playerAutoBtn');
+            
+            if (playerAutoMode) {
+                btn.textContent = 'オート切OFF';
+                btn.className = 'btn btn-primary';
+                showNotification('🎯 オートツモ切りモード開始', 'success');
+                
+                // サーバーにプレイヤーオートモード開始を通知
+                fetch(`/api/game/${gameId}/player-auto`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        enabled: true
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'OK') {
+                        console.log('✅ プレイヤーオートツモ切り開始:', data.message);
+                    } else {
+                        throw new Error(data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ プレイヤーオートツモ切り開始エラー:', error);
+                    showNotification('オートツモ切り開始失敗: ' + error.message, 'error');
+                    // ボタンを元に戻す
+                    playerAutoMode = false;
+                    btn.textContent = 'オートツモ切り';
+                    btn.className = 'btn btn-secondary';
+                });
+            } else {
+                btn.textContent = 'オートツモ切り';
+                btn.className = 'btn btn-secondary';
+                showNotification('🛑 オートツモ切りモード停止', 'warning');
+                
+                // サーバーにプレイヤーオートモード停止を通知
+                fetch(`/api/game/${gameId}/player-auto`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        enabled: false
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('🛑 プレイヤーオートツモ切り停止:', data.message);
+                })
+                .catch(error => {
+                    console.error('❌ プレイヤーオートツモ切り停止エラー:', error);
+                });
+            }
+        }
+
         // デバッグ関数群
         function forceCPUTurn() {
             if (!gameState) {
@@ -2440,6 +2517,223 @@
             }
             
             window.lastDiscardCounts = [...currentDiscardCounts];
+        }
+
+        // 役判定テスト機能
+        function testYakuAnalysis() {
+            console.log('🎰 役判定テスト開始');
+            
+            if (!gameState || !gameState.players) {
+                showNotification('ゲーム状態が無効です', 'error');
+                return;
+            }
+            
+            // 各プレイヤーの手牌を分析
+            gameState.players.forEach((player, index) => {
+                console.log(`🎰 プレイヤー${index} (${player.name}) 手牌分析:`);
+                console.log(`  手牌: ${player.hand.tiles.length}枚`);
+                console.log(`  メルド: ${player.hand.melds.length}個`);
+                console.log(`  リーチ: ${player.hand.riichi ? 'Yes' : 'No'}`);
+                console.log(`  捨て牌: ${player.hand.discards.length}枚`);
+                
+                // 手牌の内容を表示
+                if (index === 0) { // プレイヤー1の手牌は見える
+                    console.log(`  手牌詳細: ${player.hand.tiles.map(t => t.displayName || t.unicode).join(' ')}`);
+                    
+                    // 和了形かチェック
+                    testWinningHand(player.hand.tiles, player.hand.melds, index);
+                    
+                    // シャンテン数をテスト（フロントエンドでは簡易計算）
+                    const shanten = calculateSimpleShanten(player.hand.tiles, player.hand.melds);
+                    console.log(`  推定シャンテン数: ${shanten}`);
+                    
+                    // 待ち牌の可能性をテスト
+                    if (shanten <= 1) {
+                        testWaitingTiles(player.hand.tiles);
+                    }
+                } else {
+                    console.log(`  手牌詳細: [非表示] ${player.hand.tiles.length}枚`);
+                }
+                
+                // メルドの詳細
+                if (player.hand.melds.length > 0) {
+                    console.log(`  メルド詳細:`);
+                    player.hand.melds.forEach((meld, meldIndex) => {
+                        console.log(`    ${meldIndex + 1}. ${meld.type}: ${meld.tiles.map(t => t.displayName || t.unicode).join(' ')}`);
+                    });
+                }
+                
+                console.log(''); // 空行
+            });
+            
+            showNotification('役判定テストを実行しました', 'info');
+        }
+        
+        // 和了形テスト（簡易版）
+        function testWinningHand(tiles, melds, playerIndex) {
+            if (tiles.length + melds.length * 3 !== 14 && tiles.length + melds.length * 3 !== 13) {
+                console.log(`  ⚠️ 牌数異常: ${tiles.length + melds.length * 3}枚`);
+                return;
+            }
+            
+            // 七対子チェック
+            const isChiitoi = checkChiitoi(tiles);
+            if (isChiitoi && tiles.length === 14) {
+                console.log(`  🎉 七対子形: 和了可能`);
+                simulateYaku(tiles, melds, playerIndex, '七対子');
+                return;
+            }
+            
+            // 国士無双チェック
+            const isKokushi = checkKokushi(tiles);
+            if (isKokushi && tiles.length === 14) {
+                console.log(`  🎉 国士無双形: 役満！`);
+                simulateYaku(tiles, melds, playerIndex, '国士無双');
+                return;
+            }
+            
+            // 標準形チェック（簡易）
+            const isStandard = checkStandardForm(tiles, melds);
+            if (isStandard) {
+                console.log(`  🎉 標準形: 和了可能`);
+                simulateYaku(tiles, melds, playerIndex, '標準形');
+                return;
+            }
+            
+            console.log(`  ❌ 和了形ではありません`);
+        }
+        
+        // 役のシミュレーション
+        function simulateYaku(tiles, melds, playerIndex, formType) {
+            console.log(`  📊 ${formType}の役分析:`);
+            
+            const allTiles = [...tiles, ...melds.flatMap(m => m.tiles)];
+            const isMenzen = melds.every(m => m.type === 'ankan' || m.isConcealed);
+            
+            // 基本役チェック
+            const yakuList = [];
+            
+            // タンヤオ
+            if (allTiles.every(t => !t.honor && t.rank >= 2 && t.rank <= 8)) {
+                yakuList.push('タンヤオ(1翻)');
+            }
+            
+            // リーチ
+            if (gameState.players[playerIndex].hand.riichi && isMenzen) {
+                yakuList.push('リーチ(1翻)');
+            }
+            
+            // 役牌（簡易チェック）
+            const honors = ['white', 'green', 'red', 'east', 'south', 'west', 'north'];
+            honors.forEach(honor => {
+                const count = allTiles.filter(t => t.honor === honor).length;
+                if (count >= 3) {
+                    const names = {
+                        white: '白', green: '發', red: '中',
+                        east: '東', south: '南', west: '西', north: '北'
+                    };
+                    yakuList.push(`${names[honor]}(1翻)`);
+                }
+            });
+            
+            // 特殊形の役
+            if (formType === '七対子') {
+                yakuList.push('七対子(2翻)');
+            } else if (formType === '国士無双') {
+                yakuList.push('国士無双(役満)');
+            }
+            
+            if (yakuList.length > 0) {
+                console.log(`    役: ${yakuList.join(', ')}`);
+                const totalHan = yakuList.reduce((sum, yaku) => {
+                    if (yaku.includes('役満')) return sum + 13;
+                    const match = yaku.match(/(\d+)翻/);
+                    return sum + (match ? parseInt(match[1]) : 0);
+                }, 0);
+                console.log(`    合計: ${totalHan >= 13 ? '役満' : totalHan + '翻'}`);
+            } else {
+                console.log(`    役: なし（役なし）`);
+            }
+        }
+        
+        // 簡易シャンテン計算
+        function calculateSimpleShanten(tiles, melds) {
+            if (tiles.length + melds.length * 3 === 14) return -1; // 和了形
+            if (tiles.length + melds.length * 3 !== 13) return 8; // 異常
+            
+            // 超簡易計算（実際の計算は複雑）
+            const tileCounts = {};
+            tiles.forEach(tile => {
+                const key = tile.honor || `${tile.suit}_${tile.rank}`;
+                tileCounts[key] = (tileCounts[key] || 0) + 1;
+            });
+            
+            let pairs = 0;
+            let sets = 0;
+            
+            Object.values(tileCounts).forEach(count => {
+                if (count >= 3) sets++;
+                else if (count === 2) pairs++;
+            });
+            
+            // 非常に簡易的な推定
+            const currentSets = sets + melds.length;
+            const neededSets = 4;
+            const neededPairs = 1;
+            
+            return Math.max(0, (neededSets - currentSets) * 2 + Math.max(0, neededPairs - pairs));
+        }
+        
+        // 待ち牌テスト（簡易版）
+        function testWaitingTiles(tiles) {
+            console.log(`  🎯 可能性のある待ち牌:`);
+            
+            // 超簡易的な待ち牌推定
+            const suits = ['man', 'pin', 'sou'];
+            const possibleWaits = [];
+            
+            suits.forEach(suit => {
+                for (let rank = 1; rank <= 9; rank++) {
+                    // この牌を加えて和了になるかチェック（超簡易）
+                    const testTile = { suit, rank, unicode: '', displayName: `${suit}${rank}`, id: 0, isRed: false };
+                    possibleWaits.push(`${suit}${rank}`);
+                }
+            });
+            
+            // 字牌
+            ['東', '南', '西', '北', '白', '發', '中'].forEach(honor => {
+                possibleWaits.push(honor);
+            });
+            
+            console.log(`    推定待ち: ${possibleWaits.slice(0, 5).join(', ')}... (簡易推定)`);
+        }
+        
+        // ヘルパー関数
+        function checkChiitoi(tiles) {
+            if (tiles.length !== 14) return false;
+            const counts = {};
+            tiles.forEach(tile => {
+                const key = tile.honor || `${tile.suit}_${tile.rank}`;
+                counts[key] = (counts[key] || 0) + 1;
+            });
+            
+            const values = Object.values(counts);
+            return values.length === 7 && values.every(count => count === 2);
+        }
+        
+        function checkKokushi(tiles) {
+            if (tiles.length !== 14) return false;
+            // 簡易国士判定（実際はより複雑）
+            const yaochuCount = tiles.filter(t => 
+                t.honor || t.rank === 1 || t.rank === 9
+            ).length;
+            return yaochuCount >= 12;
+        }
+        
+        function checkStandardForm(tiles, melds) {
+            // 超簡易標準形判定
+            const totalTiles = tiles.length + melds.length * 3;
+            return totalTiles === 14 || totalTiles === 13;
         }
 
         // 通知表示
