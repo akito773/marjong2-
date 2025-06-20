@@ -1092,9 +1092,9 @@
             <button class="btn btn-primary" onclick="drawTile()" id="drawBtn">ツモ</button>
             <button class="btn btn-danger" onclick="discardSelected()" id="discardBtn">打牌</button>
             <button class="btn" style="background: #ff6b6b; color: white;" onclick="callRiichi()" id="riichiBtn">リーチ</button>
-            <button class="btn btn-warning" onclick="callChi()" id="chiBtn">チー</button>
-            <button class="btn btn-warning" onclick="callPon()" id="ponBtn">ポン</button>
-            <button class="btn btn-warning" onclick="callKan()" id="kanBtn">カン</button>
+            <button class="btn btn-warning" onclick="callChi()" id="chiBtn" style="display: inline-block;">チー</button>
+            <button class="btn btn-warning" onclick="callPon()" id="ponBtn" style="display: inline-block;">ポン</button>
+            <button class="btn btn-warning" onclick="callKan()" id="kanBtn" style="display: inline-block;">カン</button>
             <button class="btn btn-success" onclick="callTsumo()" id="tsumoBtn">ツモ</button>
             <button class="btn btn-success" onclick="callRon()" id="ronBtn">ロン</button>
             <button class="btn btn-info" onclick="executeAI()" id="aiBtn">AI実行</button>
@@ -1166,12 +1166,130 @@
             showNotification('ゲームが作成されました！', 'success');
         });
         
+        let gameStartNotified = false;
+        
         socket.on('gameState', (newGameState) => {
-            console.log('🎮 ゲーム状態受信:', newGameState);
+            // console.log('🎮 ゲーム状態受信:', newGameState);
             gameState = newGameState;
             updateGameDisplay();
-            showNotification('ゲームが開始されました！', 'success');
+            
+            // 初回のみゲーム開始通知を表示
+            if (!gameStartNotified && newGameState.phase === 'playing') {
+                showNotification('ゲームが開始されました！', 'success');
+                gameStartNotified = true;
+            }
         });
+
+        // メルド機会の通知を受信
+        socket.on('meldOpportunities', (data) => {
+            const timestamp = new Date().toLocaleTimeString('ja-JP', {
+                hour: '2-digit',
+                minute: '2-digit', 
+                second: '2-digit',
+                fractionalSecondDigits: 3
+            });
+            console.log(`[${timestamp}] 🀄 [CLIENT] ===== メルド機会受信開始 =====`);
+            console.log(`[${timestamp}] 🀄 [CLIENT] データ全体:`, data);
+            console.log(`[${timestamp}] 🀄 [CLIENT] 捨て牌: ${data.discardedTile?.displayName || data.discardedTile?.unicode}`);
+            console.log(`[${timestamp}] 🀄 [CLIENT] 捨て牌プレイヤー: ${data.discardPlayerId}`);
+            console.log(`[${timestamp}] 🀄 [CLIENT] オート停止: ${data.autoPaused}`);
+            console.log(`[${timestamp}] 🀄 [CLIENT] 機会があるプレイヤー数: ${data.opportunities?.length || 0}`);
+            data.opportunities?.forEach(opp => {
+                const types = [];
+                if (opp.chi) types.push('チー');
+                if (opp.pon) types.push('ポン');
+                if (opp.kan) types.push('カン');
+                console.log(`[${timestamp}] 🀄 [CLIENT] プレイヤー${opp.playerId}(${opp.playerType}): ${types.join('・')}`);
+            });
+            
+            // lastDiscardedTileを直接設定
+            console.log(`🔧 DEBUG: data.discardedTile exists: ${!!data.discardedTile}`);
+            console.log(`🔧 DEBUG: data.discardPlayerId: ${data.discardPlayerId}`);
+            console.log(`🔧 DEBUG: data.discardPlayerId !== undefined: ${data.discardPlayerId !== undefined}`);
+            
+            if (data.discardedTile && data.discardPlayerId !== undefined) {
+                lastDiscardedTile = data.discardedTile;
+                lastDiscardedPlayer = data.discardPlayerId;
+                console.log(`🔧 lastDiscardedTile set from meldOpportunities: ${lastDiscardedTile.displayName} by player ${lastDiscardedPlayer}`);
+            } else {
+                console.log(`🔧 Failed to set lastDiscardedTile - condition not met`);
+            }
+            
+            console.log(`[${timestamp}] 🀄 [CLIENT] showMeldOpportunities関数を呼び出します`);
+            showMeldOpportunities(data);
+            console.log(`[${timestamp}] 🀄 [CLIENT] ===== メルド機会受信終了 =====`);
+        });
+
+        // メルド機会表示関数
+        function showMeldOpportunities(data) {
+            const { discardedTile, discardPlayerId, opportunities, autoPaused } = data;
+            
+            // 自分（プレイヤー0）の機会をチェック
+            const myOpportunity = opportunities.find(opp => opp.playerId === 0);
+            
+            console.log('🀄 [DEBUG] showMeldOpportunities呼び出し');
+            console.log('🀄 [DEBUG] myOpportunity:', myOpportunity);
+            
+            // ボタンが存在するかチェック
+            console.log('🀄 [DEBUG] アクションパネル全体:', document.querySelector('.action-panel'));
+            console.log('🀄 [DEBUG] 全てのボタン:', document.querySelectorAll('.action-panel button'));
+            console.log('🀄 [DEBUG] chiBtn by class:', document.querySelector('#chiBtn'));
+            console.log('🀄 [DEBUG] ponBtn by class:', document.querySelector('#ponBtn'));
+            console.log('🀄 [DEBUG] kanBtn by class:', document.querySelector('#kanBtn'));
+            
+            if (myOpportunity) {
+                console.log('🀄 自分にメルド機会:', myOpportunity);
+                console.log('🀄 [DEBUG] chi:', myOpportunity.chi, 'pon:', myOpportunity.pon, 'kan:', myOpportunity.kan);
+                
+                // ボタン要素の存在確認
+                const chiBtn = document.getElementById('chiBtn');
+                const ponBtn = document.getElementById('ponBtn');
+                const kanBtn = document.getElementById('kanBtn');
+                
+                console.log('🀄 [DEBUG] chiBtn要素:', chiBtn);
+                console.log('🀄 [DEBUG] ponBtn要素:', ponBtn);
+                console.log('🀄 [DEBUG] kanBtn要素:', kanBtn);
+                
+                // メルドボタンを表示（デバッグ用：全て表示）
+                if (chiBtn) chiBtn.style.display = 'inline-block';
+                if (ponBtn) ponBtn.style.display = 'inline-block';
+                if (kanBtn) kanBtn.style.display = 'inline-block';
+                
+                console.log('🀄 [DEBUG] ボタン表示設定完了');
+                
+                // 通知表示
+                const meldTypes = [];
+                if (myOpportunity.chi) meldTypes.push('チー');
+                if (myOpportunity.pon) meldTypes.push('ポン');
+                if (myOpportunity.kan) meldTypes.push('カン');
+                
+                // オート停止の通知
+                if (autoPaused) {
+                    showNotification(`${meldTypes.join('・')}が可能です！（オート機能を停止しました）`, 'warning');
+                } else {
+                    showNotification(`${meldTypes.join('・')}が可能です！`, 'info');
+                }
+                
+                // 10秒後にボタンを非表示（オート停止時は長めに）
+                setTimeout(() => {
+                    hideMeldButtons();
+                }, autoPaused ? 10000 : 5000);
+            } else {
+                hideMeldButtons();
+            }
+        }
+
+        // メルドボタンを非表示にする関数（デバッグ用：無効化）
+        function hideMeldButtons() {
+            const chiBtn = document.getElementById('chiBtn');
+            const ponBtn = document.getElementById('ponBtn');
+            const kanBtn = document.getElementById('kanBtn');
+            
+            // デバッグ用：非表示にしない
+            // if (chiBtn) chiBtn.style.display = 'none';
+            // if (ponBtn) ponBtn.style.display = 'none';
+            // if (kanBtn) kanBtn.style.display = 'none';
+        }
         
         socket.on('roomJoined', (data) => {
             console.log('🎮 ルーム参加成功:', data);
@@ -1216,6 +1334,7 @@
         // 初期化
         document.addEventListener('DOMContentLoaded', async function() {
             console.log('🔍 DEBUG: DOM loaded, initializing...');
+            hideMeldButtons(); // 初期状態でメルドボタンを非表示
             try {
                 await soundManager.init();
                 console.log('🔍 DEBUG: SoundManager initialized');
@@ -1259,10 +1378,10 @@
                 return;
             }
 
-            console.log('🔍 DEBUG: updateGameDisplay called');
-            console.log('🔍 DEBUG: gameState:', gameState);
-            console.log('🔍 DEBUG: gameState.players:', gameState.players);
-            console.log('🔍 DEBUG: gameState.currentPlayer:', gameState.currentPlayer);
+            // console.log('🔍 DEBUG: updateGameDisplay called');
+            // console.log('🔍 DEBUG: gameState:', gameState);
+            // console.log('🔍 DEBUG: gameState.players:', gameState.players);
+            // console.log('🔍 DEBUG: gameState.currentPlayer:', gameState.currentPlayer);
 
             // 基本情報更新
             try {
@@ -1399,6 +1518,17 @@
                             }
                             
                             tileElement.textContent = tile.displayName || tile.unicode;
+                            
+                            // プレイヤー位置に応じた牌の回転
+                            switch (playerIndex) {
+                                case 1: // CPU南（下家）：左に90度回転
+                                    tileElement.style.transform = 'rotate(-90deg)';
+                                    break;
+                                case 3: // CPU北（対面）：左に90度回転
+                                    tileElement.style.transform = 'rotate(-90deg)';
+                                    break;
+                                // case 0（自分）とcase 2（CPU西）はそのまま
+                            }
                             
                             // 6×3グリッドの配置順序
                             const gridOrder = calculateRiverOrder(playerIndex, discardIndex);
@@ -1562,13 +1692,21 @@
         function updateLastDiscardedTile() {
             if (!gameState) return;
             
+            console.log('🔧 updateLastDiscardedTile called');
+            console.log('🔧 gameState.lastDiscard:', gameState.lastDiscard);
+            console.log('🔧 gameState.lastDiscardPlayer:', gameState.lastDiscardPlayer);
+            
             // gameStateから直接取得を試す
-            if (gameState.lastDiscard && gameState.lastDiscardPlayer !== undefined) {
+            if (gameState.lastDiscard && gameState.lastDiscardPlayer !== undefined && gameState.lastDiscardPlayer !== null) {
                 lastDiscardedTile = gameState.lastDiscard;
                 lastDiscardedPlayer = gameState.lastDiscardPlayer;
                 console.log(`🔧 Last discard from gameState: ${lastDiscardedTile.displayName} by player ${lastDiscardedPlayer}`);
                 return;
             }
+            
+            // デバッグ情報を追加
+            // console.log(`🔧 [DEBUG] gameState.lastDiscard:`, gameState.lastDiscard);
+            // console.log(`🔧 [DEBUG] gameState.lastDiscardPlayer:`, gameState.lastDiscardPlayer);
             
             // フォールバック：ゲームログを逆順で検索して最後の捨牌を見つける
             if (gameState.gameLog) {
@@ -1586,7 +1724,7 @@
             // 捨牌が見つからない場合はリセット
             lastDiscardedTile = null;
             lastDiscardedPlayer = null;
-            console.log(`🔧 No last discard found, reset to null`);
+            // console.log(`🔧 No last discard found, reset to null`);
         }
 
         // ゲームステータス更新
@@ -1640,9 +1778,10 @@
             const kanBtn = document.getElementById('kanBtn');
             const ronBtn = document.getElementById('ronBtn');
             
-            if (chiBtn) chiBtn.style.display = (!isMyTurn && canCallChi()) ? 'inline-block' : 'none';
-            if (ponBtn) ponBtn.style.display = (!isMyTurn && canCallPon()) ? 'inline-block' : 'none';
-            if (kanBtn) kanBtn.style.display = (isMyTurn && canCallKan()) ? 'inline-block' : 'none';
+            // デバッグ用：メルドボタンを常時表示
+            if (chiBtn) chiBtn.style.display = 'inline-block';
+            if (ponBtn) ponBtn.style.display = 'inline-block';
+            if (kanBtn) kanBtn.style.display = 'inline-block';
             if (ronBtn) ronBtn.style.display = (!isMyTurn && canCallRon()) ? 'inline-block' : 'none';
             
             // 捨て牌更新を追跡
@@ -1857,7 +1996,13 @@
         // 鳴き関数
         // チー
         async function callChi() {
+            console.log('🎯 callChi() called');
+            console.log('🎯 gameState:', !!gameState);
+            console.log('🎯 lastDiscardedTile:', lastDiscardedTile);
+            console.log('🎯 lastDiscardedPlayer:', lastDiscardedPlayer);
+            
             if (!gameState || !lastDiscardedTile) {
+                console.log('🎯 Chi early return - missing gameState or lastDiscardedTile');
                 showNotification('チーできません', 'error');
                 return;
             }
@@ -1920,7 +2065,13 @@
 
         // ポン
         async function callPon() {
+            console.log('🎯 callPon() called');
+            console.log('🎯 gameState:', !!gameState);
+            console.log('🎯 lastDiscardedTile:', lastDiscardedTile);
+            console.log('🎯 lastDiscardedPlayer:', lastDiscardedPlayer);
+            
             if (!gameState || !lastDiscardedTile) {
+                console.log('🎯 Pon early return - missing gameState or lastDiscardedTile');
                 showNotification('ポンできません', 'error');
                 return;
             }
@@ -1953,6 +2104,12 @@
                 };
 
                 console.log('🎯 ポンアクション送信');
+                console.log('🀄 [PON DEBUG] lastDiscardedTile:', lastDiscardedTile);
+                console.log('🀄 [PON DEBUG] matchingTiles:', matchingTiles);
+                console.log('🀄 [PON DEBUG] meld:', meld);
+                console.log('🀄 [PON DEBUG] currentPlayer:', gameState.currentPlayer);
+                console.log('🀄 [PON DEBUG] lastDiscardedPlayer:', lastDiscardedPlayer);
+                
                 socket.emit('playerAction', {
                     type: 'pon',
                     playerId: 'player_0',
@@ -2583,11 +2740,11 @@
                 for (let i = 0; i < 4; i++) {
                     if (currentDiscardCounts[i] !== window.lastDiscardCounts[i]) {
                         const change = currentDiscardCounts[i] - window.lastDiscardCounts[i];
-                        console.log(`🔄 プレイヤー${i} 捨て牌変更: ${window.lastDiscardCounts[i]}枚 → ${currentDiscardCounts[i]}枚 (${change > 0 ? '+' : ''}${change})`);
+                        // console.log(`🔄 プレイヤー${i} 捨て牌変更: ${window.lastDiscardCounts[i]}枚 → ${currentDiscardCounts[i]}枚 (${change > 0 ? '+' : ''}${change})`);
                         
                         if (change > 0 && gameState.players[i].hand.discards.length > 0) {
                             const latestDiscard = gameState.players[i].hand.discards[gameState.players[i].hand.discards.length - 1];
-                            console.log(`  新しい捨て牌: ${latestDiscard.displayName || latestDiscard.unicode}`);
+                            // console.log(`  新しい捨て牌: ${latestDiscard.displayName || latestDiscard.unicode}`);
                         }
                     }
                 }
