@@ -286,6 +286,15 @@ io.on('connection', (socket) => {
       }
     }
   });
+
+  // メルド処理（チー・ポン・カン）
+  socket.on('meld', (data) => {
+    console.log('🀄 [DEBUG] メルド要求:', data);
+    if (socket.gameId && games.has(socket.gameId)) {
+      const gameState = games.get(socket.gameId);
+      handleMeld(socket, gameState, data);
+    }
+  });
   
   // プレイヤーアクション（統一ハンドラー）
   socket.on('playerAction', (data) => {
@@ -310,6 +319,13 @@ io.on('connection', (socket) => {
       case 'draw':
         console.log(`🔍 [DEBUG] Handling draw action`);
         handleDraw(socket, gameState, data);
+        break;
+      case 'chi':
+      case 'pon':
+      case 'kan':
+      case 'ankan':
+        console.log(`🔍 [DEBUG] Handling meld action: ${data.type}`);
+        handleMeld(socket, gameState, data);
         break;
       default:
         console.log(`❌ [ERROR] 未知のアクション: ${data.type}`);
@@ -352,6 +368,274 @@ function handleDiscard(socket, gameState, data) {
   } else {
     console.log(`❌ [ERROR] 指定された牌が見つかりません: ${data.tileId}`);
   }
+}
+
+// メルド処理関数
+function handleMeld(socket, gameState, data) {
+  console.log(`🀄 [DEBUG] handleMeld called with type: ${data.type}`);
+  const playerId = parseInt(data.playerId.replace('player_', ''));
+  const player = gameState.players[playerId];
+  
+  if (!player) {
+    console.log(`❌ [ERROR] プレイヤーが見つかりません: ${playerId}`);
+    return;
+  }
+
+  switch (data.type) {
+    case 'chi':
+      handleChi(gameState, playerId, data);
+      break;
+    case 'pon':
+      handlePon(gameState, playerId, data);
+      break;
+    case 'kan':
+      handleKan(gameState, playerId, data);
+      break;
+    default:
+      console.log(`❌ [ERROR] 不明なメルドタイプ: ${data.type}`);
+      return;
+  }
+  
+  games.set(socket.gameId, gameState);
+  io.to(socket.gameId).emit('gameState', gameState);
+}
+
+function handleChi(gameState, playerId, data) {
+  console.log(`🀄 [DEBUG] チー処理開始: プレイヤー${playerId}`);
+  const player = gameState.players[playerId];
+  const targetTiles = data.tiles; // クライアントから送られた使用する牌のID配列
+  
+  // 最後の捨て牌を取得
+  const lastDiscard = getLastDiscardedTile(gameState);
+  if (!lastDiscard) {
+    console.log(`❌ [ERROR] 捨て牌が見つかりません`);
+    return;
+  }
+  
+  // 手牌から指定された牌を削除
+  const usedTiles = [];
+  for (const tileId of targetTiles) {
+    const tileIndex = player.hand.tiles.findIndex(t => t.id === tileId);
+    if (tileIndex !== -1) {
+      usedTiles.push(player.hand.tiles.splice(tileIndex, 1)[0]);
+    }
+  }
+  
+  // メルドを作成（チー：順子）
+  const meld = {
+    type: 'chi',
+    tiles: [...usedTiles, lastDiscard.tile],
+    from: lastDiscard.playerId,
+    open: true
+  };
+  
+  player.hand.melds.push(meld);
+  
+  // 手牌をソート
+  player.hand.tiles = sortHand(player.hand.tiles);
+  
+  // ターンをこのプレイヤーに移す
+  gameState.currentPlayer = playerId;
+  
+  console.log(`✅ チー完了: プレイヤー${playerId}が${meld.tiles.map(t => t.displayName).join('')}をチー`);
+}
+
+function handlePon(gameState, playerId, data) {
+  console.log(`🀄 [DEBUG] ポン処理開始: プレイヤー${playerId}`);
+  const player = gameState.players[playerId];
+  
+  // 最後の捨て牌を取得
+  const lastDiscard = getLastDiscardedTile(gameState);
+  if (!lastDiscard) {
+    console.log(`❌ [ERROR] 捨て牌が見つかりません`);
+    return;
+  }
+  
+  // 手牌から同じ牌を2枚削除
+  const discardedTile = lastDiscard.tile;
+  const removedTiles = [];
+  let removeCount = 2;
+  
+  for (let i = player.hand.tiles.length - 1; i >= 0 && removeCount > 0; i--) {
+    if (isSameTileType(player.hand.tiles[i], discardedTile)) {
+      removedTiles.push(player.hand.tiles.splice(i, 1)[0]);
+      removeCount--;
+    }
+  }
+  
+  if (removedTiles.length < 2) {
+    console.log(`❌ [ERROR] ポンに必要な牌が不足: ${removedTiles.length}枚`);
+    return;
+  }
+  
+  // メルドを作成（ポン：刻子）
+  const meld = {
+    type: 'pon',
+    tiles: [...removedTiles, discardedTile],
+    from: lastDiscard.playerId,
+    open: true
+  };
+  
+  player.hand.melds.push(meld);
+  
+  // 手牌をソート
+  player.hand.tiles = sortHand(player.hand.tiles);
+  
+  // ターンをこのプレイヤーに移す
+  gameState.currentPlayer = playerId;
+  
+  console.log(`✅ ポン完了: プレイヤー${playerId}が${meld.tiles.map(t => t.displayName).join('')}をポン`);
+}
+
+function handleKan(gameState, playerId, data) {
+  console.log(`🀄 [DEBUG] カン処理開始: プレイヤー${playerId}`);
+  const player = gameState.players[playerId];
+  
+  if (data.kanType === 'ankan') {
+    // 暗槓処理
+    handleAnkan(gameState, playerId, data);
+  } else {
+    // 明槓処理
+    handleMinkan(gameState, playerId, data);
+  }
+}
+
+function handleAnkan(gameState, playerId, data) {
+  console.log(`🀄 [DEBUG] 暗槓処理: プレイヤー${playerId}`);
+  const player = gameState.players[playerId];
+  const targetTileId = data.tileId;
+  
+  // 指定された牌と同じ牌を4枚削除
+  const targetTile = player.hand.tiles.find(t => t.id === targetTileId);
+  if (!targetTile) {
+    console.log(`❌ [ERROR] 指定された牌が見つかりません`);
+    return;
+  }
+  
+  const removedTiles = [];
+  for (let i = player.hand.tiles.length - 1; i >= 0; i--) {
+    if (isSameTileType(player.hand.tiles[i], targetTile) && removedTiles.length < 4) {
+      removedTiles.push(player.hand.tiles.splice(i, 1)[0]);
+    }
+  }
+  
+  if (removedTiles.length < 4) {
+    console.log(`❌ [ERROR] 暗槓に必要な牌が不足: ${removedTiles.length}枚`);
+    return;
+  }
+  
+  // メルドを作成（暗槓）
+  const meld = {
+    type: 'ankan',
+    tiles: removedTiles,
+    from: playerId,
+    open: false
+  };
+  
+  player.hand.melds.push(meld);
+  
+  // 手牌をソート
+  player.hand.tiles = sortHand(player.hand.tiles);
+  
+  // 嶺上牌を引く
+  if (gameState.wallTiles.length > 0) {
+    const drawnTile = gameState.wallTiles.pop();
+    player.hand.tiles.push(drawnTile);
+    player.hand.tiles = sortHand(player.hand.tiles);
+    gameState.remainingTiles = gameState.wallTiles.length;
+  }
+  
+  console.log(`✅ 暗槓完了: プレイヤー${playerId}が${meld.tiles.map(t => t.displayName).join('')}を暗槓`);
+}
+
+function handleMinkan(gameState, playerId, data) {
+  console.log(`🀄 [DEBUG] 明槓処理: プレイヤー${playerId}`);
+  const player = gameState.players[playerId];
+  
+  // 最後の捨て牌を取得
+  const lastDiscard = getLastDiscardedTile(gameState);
+  if (!lastDiscard) {
+    console.log(`❌ [ERROR] 捨て牌が見つかりません`);
+    return;
+  }
+  
+  // 手牌から同じ牌を3枚削除
+  const discardedTile = lastDiscard.tile;
+  const removedTiles = [];
+  let removeCount = 3;
+  
+  for (let i = player.hand.tiles.length - 1; i >= 0 && removeCount > 0; i--) {
+    if (isSameTileType(player.hand.tiles[i], discardedTile)) {
+      removedTiles.push(player.hand.tiles.splice(i, 1)[0]);
+      removeCount--;
+    }
+  }
+  
+  if (removedTiles.length < 3) {
+    console.log(`❌ [ERROR] 明槓に必要な牌が不足: ${removedTiles.length}枚`);
+    return;
+  }
+  
+  // メルドを作成（明槓）
+  const meld = {
+    type: 'minkan',
+    tiles: [...removedTiles, discardedTile],
+    from: lastDiscard.playerId,
+    open: true
+  };
+  
+  player.hand.melds.push(meld);
+  
+  // 手牌をソート
+  player.hand.tiles = sortHand(player.hand.tiles);
+  
+  // 嶺上牌を引く
+  if (gameState.wallTiles.length > 0) {
+    const drawnTile = gameState.wallTiles.pop();
+    player.hand.tiles.push(drawnTile);
+    player.hand.tiles = sortHand(player.hand.tiles);
+    gameState.remainingTiles = gameState.wallTiles.length;
+  }
+  
+  // ターンをこのプレイヤーに移す
+  gameState.currentPlayer = playerId;
+  
+  console.log(`✅ 明槓完了: プレイヤー${playerId}が${meld.tiles.map(t => t.displayName).join('')}を明槓`);
+}
+
+// ヘルパー関数
+function getLastDiscardedTile(gameState) {
+  // 最も新しい捨て牌を取得
+  let lastDiscard = null;
+  let latestTime = 0;
+  
+  for (let i = 0; i < 4; i++) {
+    const player = gameState.players[i];
+    if (player.hand.discards.length > 0) {
+      const lastTile = player.hand.discards[player.hand.discards.length - 1];
+      // 時間情報があれば使用、なければプレイヤーインデックス順で判定
+      const discardTime = lastTile.timestamp || i;
+      if (discardTime > latestTime) {
+        latestTime = discardTime;
+        lastDiscard = {
+          tile: lastTile,
+          playerId: i
+        };
+      }
+    }
+  }
+  
+  return lastDiscard;
+}
+
+function isSameTileType(tile1, tile2) {
+  if (tile1.honor && tile2.honor) {
+    return tile1.honor === tile2.honor;
+  }
+  if (tile1.suit && tile2.suit) {
+    return tile1.suit === tile2.suit && tile1.rank === tile2.rank;
+  }
+  return false;
 }
 
 function handleDraw(socket, gameState, data) {

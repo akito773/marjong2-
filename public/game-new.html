@@ -1425,6 +1425,83 @@
             updateMeldDisplay();
         }
 
+        // メルド表示更新
+        function updateMeldDisplay() {
+            if (!gameState || !gameState.players) return;
+            
+            gameState.players.forEach((player, playerIndex) => {
+                const meldElement = document.getElementById(`melds${playerIndex}`);
+                if (!meldElement || !player.hand || !player.hand.melds) return;
+                
+                meldElement.innerHTML = '';
+                
+                player.hand.melds.forEach((meld, meldIndex) => {
+                    const meldGroup = document.createElement('div');
+                    meldGroup.className = 'meld-group';
+                    meldGroup.style.display = 'flex';
+                    meldGroup.style.gap = '2px';
+                    meldGroup.style.margin = '5px';
+                    meldGroup.style.padding = '5px';
+                    meldGroup.style.background = 'rgba(255, 255, 255, 0.9)';
+                    meldGroup.style.border = '2px solid #007bff';
+                    meldGroup.style.borderRadius = '8px';
+                    
+                    // メルドタイプラベル
+                    const typeLabel = document.createElement('div');
+                    typeLabel.style.fontSize = '10px';
+                    typeLabel.style.color = '#007bff';
+                    typeLabel.style.fontWeight = 'bold';
+                    typeLabel.style.marginRight = '5px';
+                    
+                    switch (meld.type) {
+                        case 'chi':
+                            typeLabel.textContent = 'チー';
+                            break;
+                        case 'pon':
+                            typeLabel.textContent = 'ポン';
+                            break;
+                        case 'kan':
+                        case 'ankan':
+                        case 'minkan':
+                            typeLabel.textContent = 'カン';
+                            break;
+                    }
+                    
+                    meldGroup.appendChild(typeLabel);
+                    
+                    // メルドの牌を表示
+                    meld.tiles.forEach((tile, tileIndex) => {
+                        const tileElement = document.createElement('div');
+                        tileElement.className = 'meld-tile';
+                        tileElement.style.width = '20px';
+                        tileElement.style.height = '28px';
+                        tileElement.style.border = '1px solid #333';
+                        tileElement.style.display = 'flex';
+                        tileElement.style.alignItems = 'center';
+                        tileElement.style.justifyContent = 'center';
+                        tileElement.style.fontSize = '10px';
+                        tileElement.style.background = 'white';
+                        
+                        // 暗槓の場合、端の牌は裏向き
+                        if (meld.type === 'ankan' && (tileIndex === 0 || tileIndex === 3)) {
+                            tileElement.textContent = '🀫';
+                            tileElement.style.background = '#e9ecef';
+                        } else {
+                            tileElement.textContent = tile.displayName || tile.unicode;
+                            if (tile.isRed) {
+                                tileElement.style.color = '#dc3545';
+                                tileElement.style.fontWeight = '800';
+                            }
+                        }
+                        
+                        meldGroup.appendChild(tileElement);
+                    });
+                    
+                    meldElement.appendChild(meldGroup);
+                });
+            });
+        }
+
         // 河の配置順序計算（本格麻雀仕様）
         function calculateRiverOrder(playerIndex, discardIndex) {
             const row = Math.floor(discardIndex / 6);
