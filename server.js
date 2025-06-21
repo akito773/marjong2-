@@ -381,6 +381,14 @@ io.on('connection', (socket) => {
         logWithTime(`🔍 [PLAYER ACTION] メルドアクション: ${data.type}`);
         handleMeld(socket, gameState, data);
         break;
+      case 'tsumo':
+        logWithTime(`🎯 [PLAYER ACTION] ツモ和了: ${data.playerId}`);
+        handleTsumo(socket, gameState, data);
+        break;
+      case 'ron':
+        logWithTime(`🎯 [PLAYER ACTION] ロン和了: ${data.playerId}`);
+        handleRon(socket, gameState, data);
+        break;
       default:
         console.log(`❌ [ERROR] 未知のアクション: ${data.type}`);
     }
@@ -428,6 +436,19 @@ function handleDiscard(socket, gameState, data) {
     gameState.currentPlayer = (gameState.currentPlayer + 1) % 4;
     console.log(`🔄 [DEBUG] プレイヤー変更: ${oldPlayer} → ${gameState.currentPlayer}`);
     console.log(`🔍 [DEBUG] 次のプレイヤータイプ: ${gameState.players[gameState.currentPlayer].type}`);
+    
+    // メルド後の捨て牌の場合、CPU自動モードを再開
+    if (gameState.phase === 'discard') {
+      gameState.phase = 'playing';
+      gameState.cpuAutoMode = true;
+      logWithTime(`🔄 [TURN] メルド後の捨て牌完了 - CPU自動モード再開`);
+      
+      // CPU自動対戦を即座に再開
+      setTimeout(() => {
+        logWithTime(`🤖 [AUTO RESTART] CPU自動対戦を再開します`);
+        startCpuAutoGame(socket.gameId);
+      }, 1000);
+    }
     
     games.set(socket.gameId, gameState);
     io.to(socket.gameId).emit('gameState', gameState);
@@ -513,10 +534,15 @@ function handleChi(gameState, playerId, data) {
   // 手牌をソート
   player.hand.tiles = sortHand(player.hand.tiles);
   
-  // ターンをこのプレイヤーに移す
+  // ターンをこのプレイヤーに移す（メルド後は捨て牌が必要）
   gameState.currentPlayer = playerId;
+  gameState.phase = 'discard'; // 捨て牌フェーズに設定
   
-  logWithTime(`✅ [CHI] チー完了: プレイヤー${playerId}が${meld.tiles.map(t => t.displayName || t.name).join('')}をチー`);
+  // メルド後は自動進行を一時停止（手動で捨て牌する必要があるため）
+  gameState.cpuAutoMode = false;
+  
+  logWithTime(`✅ [CHI] チー完了: プレイヤー${playerId}が${meld.tiles.map(t => t.displayName || t.name).join('')}をチー - 捨て牌待ち`);
+  logWithTime(`🔍 [CHI DEBUG] メルド後の手牌数: ${player.hand.tiles.length}, メルド数: ${player.hand.melds.length}`);
 }
 
 function handlePon(gameState, playerId, data) {
@@ -570,10 +596,14 @@ function handlePon(gameState, playerId, data) {
   // 手牌をソート
   player.hand.tiles = sortHand(player.hand.tiles);
   
-  // ターンをこのプレイヤーに移す
+  // ターンをこのプレイヤーに移す（メルド後は捨て牌が必要）
   gameState.currentPlayer = playerId;
+  gameState.phase = 'discard'; // 捨て牌フェーズに設定
   
-  logWithTime(`✅ [PON] ポン完了: プレイヤー${playerId}が${meld.tiles.map(t => t.displayName || t.name).join('')}をポン`);
+  // メルド後は自動進行を一時停止（手動で捨て牌する必要があるため）
+  gameState.cpuAutoMode = false;
+  
+  logWithTime(`✅ [PON] ポン完了: プレイヤー${playerId}が${meld.tiles.map(t => t.displayName || t.name).join('')}をポン - 捨て牌待ち`);
 }
 
 function handleKan(gameState, playerId, data) {
@@ -735,6 +765,664 @@ function isSameTileType(tile1, tile2) {
   return false;
 }
 
+// 和了判定システム（役も含めて判定）
+function checkWin(tiles, melds = [], player = null, winTile = null, isTsumo = false) {
+  logWithTime(`🎯 [WIN CHECK] 和了判定開始: 手牌${tiles.length}枚, メルド${melds.length}個`);
+  
+  // メルドを含めた全牌数が14枚になるかチェック
+  const totalTiles = tiles.length + (melds.length * 3);
+  if (totalTiles !== 14) {
+    logWithTime(`❌ [WIN CHECK] 牌数が不正: ${totalTiles}枚`);
+    return { canWin: false, error: '牌数が不正です' };
+  }
+  
+  let winPattern = null;
+  
+  // 基本和了形（4面子1雀頭）をチェック
+  if (checkBasicWinPattern(tiles, melds)) {
+    winPattern = 'basic';
+  }
+  // 七対子をチェック（メルドがない場合のみ）
+  else if (melds.length === 0 && checkChiitoi(tiles)) {
+    winPattern = 'chiitoi';
+  }
+  // 国士無双をチェック（メルドがない場合のみ）
+  else if (melds.length === 0 && checkKokushi(tiles)) {
+    winPattern = 'kokushi';
+  }
+  
+  if (!winPattern) {
+    logWithTime(`❌ [WIN CHECK] 和了形ではありません`);
+    return { canWin: false, error: '和了形ではありません' };
+  }
+  
+  // 役をチェック
+  const yaku = checkYaku(tiles, melds, player, winTile, isTsumo, winPattern);
+  if (yaku.length === 0) {
+    logWithTime(`❌ [WIN CHECK] 役がありません`);
+    return { canWin: false, error: '役がありません（最低1役必要）' };
+  }
+  
+  logWithTime(`✅ [WIN CHECK] ${winPattern}形で和了 - 役: ${yaku.map(y => y.name).join('・')}`);
+  return { 
+    canWin: true, 
+    pattern: winPattern, 
+    yaku: yaku,
+    han: yaku.reduce((sum, y) => sum + y.han, 0)
+  };
+}
+
+// 役判定システム
+function checkYaku(tiles, melds, player, winTile, isTsumo, winPattern) {
+  const yaku = [];
+  
+  // 役満系
+  if (winPattern === 'kokushi') {
+    yaku.push({ name: '国士無双', han: 13, isYakuman: true });
+    return yaku;
+  }
+  
+  // リーチ
+  if (player && player.hand.riichi) {
+    yaku.push({ name: 'リーチ', han: 1 });
+  }
+  
+  // ツモ
+  if (isTsumo) {
+    yaku.push({ name: 'ツモ', han: 1 });
+  }
+  
+  // 七対子
+  if (winPattern === 'chiitoi') {
+    yaku.push({ name: '七対子', han: 2 });
+  }
+  
+  // タンヤオ（断么九）
+  if (checkTanyao(tiles, melds)) {
+    yaku.push({ name: 'タンヤオ', han: 1 });
+  }
+  
+  // ピンフ（平和）
+  if (checkPinfu(tiles, melds, winTile)) {
+    yaku.push({ name: 'ピンフ', han: 1 });
+  }
+  
+  // 一盃口
+  if (checkIipeikou(tiles, melds)) {
+    yaku.push({ name: '一盃口', han: 1 });
+  }
+  
+  return yaku;
+}
+
+// タンヤオ判定（2-8の数牌のみ）
+function checkTanyao(tiles, melds) {
+  // 手牌チェック
+  for (const tile of tiles) {
+    if (tile.honor || tile.rank === 1 || tile.rank === 9) {
+      return false;
+    }
+  }
+  
+  // メルドチェック
+  for (const meld of melds) {
+    for (const tile of meld.tiles) {
+      if (tile.honor || tile.rank === 1 || tile.rank === 9) {
+        return false;
+      }
+    }
+  }
+  
+  return true;
+}
+
+// ピンフ判定（平和）
+function checkPinfu(tiles, melds, winTile) {
+  // メルドがあるとピンフにならない
+  if (melds.length > 0) return false;
+  
+  // 基本的なピンフ判定（簡易版）
+  // 実際はもっと複雑（両面待ち、役牌なし等）
+  return false; // 簡易実装のため一旦false
+}
+
+// 一盃口判定
+function checkIipeikou(tiles, melds) {
+  // メルドがあると一盃口にならない
+  if (melds.length > 0) return false;
+  
+  // 簡易実装のため一旦false
+  return false;
+}
+
+// 基本和了形（4面子1雀頭）チェック
+function checkBasicWinPattern(tiles, melds) {
+  // 手牌のコピーを作成
+  const handTiles = [...tiles];
+  
+  // 既存メルドの面子数
+  const existingMentsu = melds.length;
+  
+  // 必要な面子数（4 - 既存メルド数）
+  const neededMentsu = 4 - existingMentsu;
+  
+  // 雀頭（対子）を探す
+  for (let i = 0; i < handTiles.length - 1; i++) {
+    const tile1 = handTiles[i];
+    for (let j = i + 1; j < handTiles.length; j++) {
+      const tile2 = handTiles[j];
+      
+      if (isSameTileType(tile1, tile2)) {
+        // 雀頭候補を除いた残りの牌
+        const remainingTiles = [...handTiles];
+        remainingTiles.splice(j, 1);
+        remainingTiles.splice(i, 1);
+        
+        // 残りの牌で必要数の面子が作れるかチェック
+        if (checkMentsuPattern(remainingTiles, neededMentsu)) {
+          return true;
+        }
+      }
+    }
+  }
+  
+  return false;
+}
+
+// 面子パターンチェック
+function checkMentsuPattern(tiles, neededCount) {
+  if (neededCount === 0) {
+    return tiles.length === 0;
+  }
+  
+  if (tiles.length < 3) {
+    return false;
+  }
+  
+  const sortedTiles = [...tiles].sort((a, b) => {
+    if (a.suit !== b.suit) return a.suit.localeCompare(b.suit);
+    if (a.rank !== b.rank) return a.rank - b.rank;
+    if (a.honor !== b.honor) return (a.honor || '').localeCompare(b.honor || '');
+    return 0;
+  });
+  
+  // 刻子をチェック
+  for (let i = 0; i <= sortedTiles.length - 3; i++) {
+    if (isSameTileType(sortedTiles[i], sortedTiles[i + 1]) && 
+        isSameTileType(sortedTiles[i + 1], sortedTiles[i + 2])) {
+      const remaining = [...sortedTiles];
+      remaining.splice(i, 3);
+      if (checkMentsuPattern(remaining, neededCount - 1)) {
+        return true;
+      }
+    }
+  }
+  
+  // 順子をチェック（数牌のみ）
+  for (let i = 0; i < sortedTiles.length; i++) {
+    const tile = sortedTiles[i];
+    if (tile.honor) continue; // 字牌は順子を作れない
+    if (tile.rank > 7) continue; // 8,9は順子の最初になれない
+    
+    // n, n+1, n+2 を探す
+    const nextTile = sortedTiles.find((t, idx) => 
+      idx > i && t.suit === tile.suit && t.rank === tile.rank + 1);
+    const nextNextTile = sortedTiles.find((t, idx) => 
+      idx > i && t.suit === tile.suit && t.rank === tile.rank + 2);
+    
+    if (nextTile && nextNextTile) {
+      const remaining = [...sortedTiles];
+      // 後ろから削除（インデックスがずれないように）
+      const indices = [
+        sortedTiles.indexOf(nextNextTile),
+        sortedTiles.indexOf(nextTile),
+        i
+      ].sort((a, b) => b - a);
+      
+      indices.forEach(idx => remaining.splice(idx, 1));
+      
+      if (checkMentsuPattern(remaining, neededCount - 1)) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
+// 七対子チェック
+function checkChiitoi(tiles) {
+  if (tiles.length !== 14) return false;
+  
+  const pairs = new Map();
+  for (const tile of tiles) {
+    const key = `${tile.suit}_${tile.rank}_${tile.honor}`;
+    pairs.set(key, (pairs.get(key) || 0) + 1);
+  }
+  
+  // 7種類の対子があるかチェック
+  const pairCounts = Array.from(pairs.values());
+  return pairCounts.length === 7 && pairCounts.every(count => count === 2);
+}
+
+// 国士無双チェック
+function checkKokushi(tiles) {
+  if (tiles.length !== 14) return false;
+  
+  const yaochu = [
+    'man_1', 'man_9', 'pin_1', 'pin_9', 'sou_1', 'sou_9',
+    'ji_東', 'ji_南', 'ji_西', 'ji_北', 'ji_白', 'ji_發', 'ji_中'
+  ];
+  
+  const tileCounts = new Map();
+  for (const tile of tiles) {
+    const key = tile.honor ? `ji_${tile.honor}` : `${tile.suit}_${tile.rank}`;
+    tileCounts.set(key, (tileCounts.get(key) || 0) + 1);
+  }
+  
+  // 13種類のヤオ九牌がすべて含まれているかチェック
+  let pairCount = 0;
+  for (const yao of yaochu) {
+    const count = tileCounts.get(yao) || 0;
+    if (count === 0) return false;
+    if (count === 2) pairCount++;
+    if (count > 2) return false;
+  }
+  
+  // 1つだけ対子があるかチェック
+  return pairCount === 1;
+}
+
+// 点数計算システム
+function calculateScore(tiles, melds, yaku, winTile, isTsumo, isParent, winPattern) {
+  logWithTime(`💰 [SCORE] 点数計算開始: ${yaku.length}役, ${winPattern}形`);
+  
+  // 役満チェック
+  const yakumanYaku = yaku.filter(y => y.isYakuman);
+  if (yakumanYaku.length > 0) {
+    return calculateYakumanScore(yakumanYaku, isParent, isTsumo);
+  }
+  
+  // 通常役の計算
+  const han = yaku.reduce((sum, y) => sum + y.han, 0);
+  const fu = calculateFu(tiles, melds, winTile, isTsumo, winPattern, yaku);
+  
+  logWithTime(`💰 [SCORE] ${han}翻${fu}符`);
+  
+  return calculateNormalScore(han, fu, isParent, isTsumo);
+}
+
+// 符計算
+function calculateFu(tiles, melds, winTile, isTsumo, winPattern, yaku) {
+  let fu = 20; // 基本符
+  
+  // 七対子は特殊（25符固定）
+  if (winPattern === 'chiitoi') {
+    return 25;
+  }
+  
+  // ツモ符
+  if (isTsumo) {
+    fu += 2;
+  }
+  
+  // 門前ロン符
+  if (!isTsumo && melds.every(m => m.isConcealed)) {
+    fu += 10;
+  }
+  
+  // 雀頭符（役牌の場合）
+  // 簡易実装：後で詳細化
+  
+  // 面子符の計算
+  for (const meld of melds) {
+    if (meld.type === 'pon' || meld.type === 'kan') {
+      // 刻子・槓子の符
+      let meldFu = 2; // 明刻の基本符
+      
+      if (meld.isConcealed) {
+        meldFu *= 2; // 暗刻は倍
+      }
+      
+      // 槓子はさらに倍
+      if (meld.type === 'kan') {
+        meldFu *= 4;
+      }
+      
+      // ヤオ九牌は倍
+      const tile = meld.tiles[0];
+      if (tile.honor || tile.rank === 1 || tile.rank === 9) {
+        meldFu *= 2;
+      }
+      
+      fu += meldFu;
+    }
+  }
+  
+  // 待ちの種類による符
+  // 簡易実装：リャンメン待ち以外は+2符
+  // 詳細な待ち判定は複雑なので後で実装
+  
+  // ピンフの場合は30符固定
+  if (yaku.some(y => y.name === 'ピンフ')) {
+    return 30;
+  }
+  
+  // 最低30符
+  fu = Math.max(fu, 30);
+  
+  // 10符単位で切り上げ
+  fu = Math.ceil(fu / 10) * 10;
+  
+  logWithTime(`💰 [FU] 符計算結果: ${fu}符`);
+  return fu;
+}
+
+// 通常役の点数計算
+function calculateNormalScore(han, fu, isParent, isTsumo) {
+  let baseScore;
+  
+  // 満貫以上の判定
+  if (han >= 13) {
+    baseScore = 8000; // 数え役満
+  } else if (han >= 11) {
+    baseScore = 6000; // 三倍満
+  } else if (han >= 8) {
+    baseScore = 4000; // 倍満
+  } else if (han >= 6) {
+    baseScore = 3000; // 跳満
+  } else if (han >= 5 || (han >= 4 && fu >= 40) || (han >= 3 && fu >= 70)) {
+    baseScore = 2000; // 満貫
+  } else {
+    // 通常計算: fu × 2^(han+2)
+    baseScore = fu * Math.pow(2, han + 2);
+  }
+  
+  // 親の場合は1.5倍
+  if (isParent) {
+    baseScore = Math.floor(baseScore * 1.5);
+  }
+  
+  // 支払い方式による分配
+  let payments = {};
+  
+  if (isTsumo) {
+    // ツモの場合：全員から支払い
+    if (isParent) {
+      // 親ツモ：子が全額の1/3ずつ支払い
+      const childPayment = Math.ceil(baseScore / 3 / 100) * 100;
+      payments = {
+        child1: childPayment,
+        child2: childPayment,
+        child3: childPayment,
+        winner: childPayment * 3
+      };
+    } else {
+      // 子ツモ：親が半額、他の子が1/4ずつ支払い
+      const parentPayment = Math.ceil(baseScore / 2 / 100) * 100;
+      const childPayment = Math.ceil(baseScore / 4 / 100) * 100;
+      payments = {
+        parent: parentPayment,
+        child1: childPayment,
+        child2: childPayment,
+        winner: parentPayment + childPayment * 2
+      };
+    }
+  } else {
+    // ロンの場合：放銃者が全額支払い
+    const totalPayment = Math.ceil(baseScore / 100) * 100;
+    payments = {
+      loser: totalPayment,
+      winner: totalPayment
+    };
+  }
+  
+  logWithTime(`💰 [SCORE] 点数計算完了: ${payments.winner}点`);
+  
+  return {
+    han: han,
+    fu: fu,
+    baseScore: baseScore,
+    payments: payments,
+    total: payments.winner,
+    isParent: isParent,
+    isTsumo: isTsumo
+  };
+}
+
+// 役満の点数計算
+function calculateYakumanScore(yakumanYaku, isParent, isTsumo) {
+  const yakumanCount = yakumanYaku.reduce((sum, y) => sum + (y.han === 13 ? 1 : y.han / 13), 0);
+  let baseScore = 8000 * yakumanCount;
+  
+  if (isParent) {
+    baseScore = Math.floor(baseScore * 1.5);
+  }
+  
+  let payments = {};
+  
+  if (isTsumo) {
+    if (isParent) {
+      const childPayment = Math.ceil(baseScore / 3 / 100) * 100;
+      payments = {
+        child1: childPayment,
+        child2: childPayment,
+        child3: childPayment,
+        winner: childPayment * 3
+      };
+    } else {
+      const parentPayment = Math.ceil(baseScore / 2 / 100) * 100;
+      const childPayment = Math.ceil(baseScore / 4 / 100) * 100;
+      payments = {
+        parent: parentPayment,
+        child1: childPayment,
+        child2: childPayment,
+        winner: parentPayment + childPayment * 2
+      };
+    }
+  } else {
+    const totalPayment = Math.ceil(baseScore / 100) * 100;
+    payments = {
+      loser: totalPayment,
+      winner: totalPayment
+    };
+  }
+  
+  logWithTime(`💰 [YAKUMAN] 役満${yakumanCount}倍: ${payments.winner}点`);
+  
+  return {
+    han: yakumanCount * 13,
+    fu: 0,
+    baseScore: baseScore,
+    payments: payments,
+    total: payments.winner,
+    isParent: isParent,
+    isTsumo: isTsumo,
+    isYakuman: true,
+    yakumanCount: yakumanCount
+  };
+}
+
+// テンパイ（聴牌）チェック
+function checkTenpai(tiles, melds, player) {
+  const currentTileCount = tiles.length + (melds.length * 3);
+  
+  // 13枚の場合のみテンパイチェック（14枚は和了チェック）
+  if (currentTileCount !== 13) {
+    return { isTenpai: false, waitingTiles: [] };
+  }
+  
+  const waitingTiles = [];
+  
+  // 全ての牌種を試して、和了できるかチェック
+  const allTileTypes = [];
+  
+  // 数牌 1-9
+  for (const suit of ['man', 'pin', 'sou']) {
+    for (let rank = 1; rank <= 9; rank++) {
+      allTileTypes.push({ suit, rank });
+    }
+  }
+  
+  // 字牌
+  for (const honor of ['東', '南', '西', '北', '白', '發', '中']) {
+    allTileTypes.push({ honor });
+  }
+  
+  for (const tileType of allTileTypes) {
+    const testTiles = [...tiles, tileType];
+    const winResult = checkWin(testTiles, melds, player, tileType, true);
+    
+    if (winResult.canWin) {
+      waitingTiles.push(tileType);
+    }
+  }
+  
+  return {
+    isTenpai: waitingTiles.length > 0,
+    waitingTiles: waitingTiles
+  };
+}
+
+// ツモ和了ハンドラー
+function handleTsumo(socket, gameState, data) {
+  logWithTime(`🎯 [TSUMO] ツモ和了処理開始`);
+  const playerId = parseInt(data.playerId.replace('player_', ''));
+  const player = gameState.players[playerId];
+  
+  if (!player) {
+    logWithTime(`❌ [TSUMO ERROR] プレイヤーが見つかりません: ${playerId}`);
+    socket.emit('winResult', { success: false, error: 'プレイヤーが見つかりません' });
+    return;
+  }
+  
+  // 現在のプレイヤーのターンかチェック
+  if (gameState.currentPlayer !== playerId) {
+    logWithTime(`❌ [TSUMO ERROR] プレイヤー${playerId}のターンではありません`);
+    socket.emit('winResult', { success: false, error: 'あなたのターンではありません' });
+    return;
+  }
+  
+  // 和了判定（役も含む）
+  const winResult = checkWin(player.hand.tiles, player.hand.melds, player, null, true);
+  if (!winResult.canWin) {
+    logWithTime(`❌ [TSUMO ERROR] プレイヤー${playerId}: ${winResult.error}`);
+    socket.emit('winResult', { success: false, error: winResult.error });
+    return;
+  }
+  
+  // 点数計算
+  const isParent = player.wind === 'east';
+  const score = calculateScore(
+    player.hand.tiles, 
+    player.hand.melds, 
+    winResult.yaku, 
+    null, 
+    true, 
+    isParent, 
+    winResult.pattern
+  );
+  
+  logWithTime(`✅ [TSUMO] プレイヤー${playerId}(${player.name})がツモ和了！ ${score.total}点`);
+  
+  // ゲーム終了処理
+  gameState.phase = 'finished';
+  gameState.winner = playerId;
+  gameState.winType = 'tsumo';
+  gameState.cpuAutoMode = false;
+  
+  // 全プレイヤーに結果を通知
+  const winData = {
+    success: true,
+    winner: playerId,
+    winnerName: player.name,
+    winType: 'tsumo',
+    yaku: winResult.yaku,
+    han: winResult.han,
+    score: score,
+    message: `${player.name}がツモ和了しました！`
+  };
+  
+  games.set(socket.gameId, gameState);
+  io.to(socket.gameId).emit('gameState', gameState);
+  io.to(socket.gameId).emit('winResult', winData);
+}
+
+// ロン和了ハンドラー
+function handleRon(socket, gameState, data) {
+  logWithTime(`🎯 [RON] ロン和了処理開始`);
+  const playerId = parseInt(data.playerId.replace('player_', ''));
+  const player = gameState.players[playerId];
+  
+  if (!player) {
+    logWithTime(`❌ [RON ERROR] プレイヤーが見つかりません: ${playerId}`);
+    socket.emit('winResult', { success: false, error: 'プレイヤーが見つかりません' });
+    return;
+  }
+  
+  // 自分のターンではないことを確認（ロンは他人の捨て牌で和了）
+  if (gameState.currentPlayer === playerId) {
+    logWithTime(`❌ [RON ERROR] プレイヤー${playerId}は自分のターンです（ロンは不可）`);
+    socket.emit('winResult', { success: false, error: '自分のターンではロンできません' });
+    return;
+  }
+  
+  // 最後の捨て牌があるかチェック
+  const lastDiscard = getLastDiscardedTile(gameState);
+  if (!lastDiscard) {
+    logWithTime(`❌ [RON ERROR] 捨て牌が見つかりません`);
+    socket.emit('winResult', { success: false, error: '捨て牌が見つかりません' });
+    return;
+  }
+  
+  // 仮想的に捨て牌を手牌に加えて和了判定（役も含む）
+  const testTiles = [...player.hand.tiles, lastDiscard.tile];
+  const winResult = checkWin(testTiles, player.hand.melds, player, lastDiscard.tile, false);
+  if (!winResult.canWin) {
+    logWithTime(`❌ [RON ERROR] プレイヤー${playerId}: ${winResult.error}`);
+    socket.emit('winResult', { success: false, error: winResult.error });
+    return;
+  }
+  
+  // 点数計算
+  const isParent = player.wind === 'east';
+  const score = calculateScore(
+    testTiles, 
+    player.hand.melds, 
+    winResult.yaku, 
+    lastDiscard.tile, 
+    false, 
+    isParent, 
+    winResult.pattern
+  );
+  
+  logWithTime(`✅ [RON] プレイヤー${playerId}(${player.name})がロン和了！ ${score.total}点`);
+  
+  // ゲーム終了処理
+  gameState.phase = 'finished';
+  gameState.winner = playerId;
+  gameState.winType = 'ron';
+  gameState.cpuAutoMode = false;
+  
+  // 全プレイヤーに結果を通知
+  const winData = {
+    success: true,
+    winner: playerId,
+    winnerName: player.name,
+    winType: 'ron',
+    yaku: winResult.yaku,
+    han: winResult.han,
+    score: score,
+    discardPlayer: lastDiscard.playerId,
+    discardTile: lastDiscard.tile,
+    message: `${player.name}がロン和了しました！`
+  };
+  
+  games.set(socket.gameId, gameState);
+  io.to(socket.gameId).emit('gameState', gameState);
+  io.to(socket.gameId).emit('winResult', winData);
+}
+
 // メルド可能性チェック関数
 function checkMeldOpportunities(socket, gameState, discardedTile, discardPlayerId) {
   logWithTime(`🔍 [MELD CHECK] メルド可能性チェック開始: ${discardedTile.displayName || discardedTile.unicode}`);
@@ -886,8 +1574,14 @@ function startCpuAutoGame(gameId) {
     console.log(`🤖 [DEBUG] currentPlayer name: ${currentPlayer.name}`);
     console.log(`🤖 [DEBUG] currentPlayer tiles count: ${currentPlayer.hand.tiles.length}`);
     
-    // プレイヤータイプに関係なく、手牌が13枚の場合は自動ツモ
-    if (currentPlayer.hand.tiles.length === 13) {
+    // プレイヤータイプに関係なく、手牌が適切な枚数の場合は自動ツモ
+    // 基本は13枚だが、メルドがある場合は減る（3枚メルド1個につき-3枚）
+    const meldCount = currentPlayer.hand.melds ? currentPlayer.hand.melds.length : 0;
+    const expectedTileCount = 13 - (meldCount * 3);
+    
+    console.log(`🔍 [MELD DEBUG] プレイヤー${currentState.currentPlayer}: メルド数=${meldCount}, 期待手牌数=${expectedTileCount}, 実際手牌数=${currentPlayer.hand.tiles.length}`);
+    
+    if (currentPlayer.hand.tiles.length === expectedTileCount) {
       console.log(`🎯 [DEBUG] プレイヤー${currentState.currentPlayer}(${currentPlayer.type})が自動ツモを実行（現在${currentPlayer.hand.tiles.length}枚）`);
       if (currentState.wallTiles.length > 0) {
         const drawnTile = currentState.wallTiles.pop();
@@ -908,8 +1602,9 @@ function startCpuAutoGame(gameId) {
     if (currentPlayer.type === 'cpu') {
       console.log(`🤖 [DEBUG] CPUプレイヤーのターンを実行`);
       
-      // 手牌が14枚の場合は捨て牌
-      if (currentPlayer.hand.tiles.length === 14) {
+      // 手牌が適切な枚数+1の場合は捨て牌（ツモ後の状態）
+      const expectedDiscardCount = expectedTileCount + 1;
+      if (currentPlayer.hand.tiles.length === expectedDiscardCount) {
         console.log(`🤖 [DEBUG] CPUが捨て牌を実行（現在${currentPlayer.hand.tiles.length}枚）`);
         const randomIndex = Math.floor(Math.random() * currentPlayer.hand.tiles.length);
         const tileToDiscard = currentPlayer.hand.tiles[randomIndex];
@@ -921,7 +1616,7 @@ function startCpuAutoGame(gameId) {
       }
     } else {
       // 人間プレイヤーの場合
-      if (currentState.playerAutoTsumoKiri && currentPlayer.hand.tiles.length === 14) {
+      if (currentState.playerAutoTsumoKiri && currentPlayer.hand.tiles.length === expectedTileCount + 1) {
         console.log(`👤 [DEBUG] プレイヤーオートツモ切り実行（手牌${currentPlayer.hand.tiles.length}枚）`);
         // 最後にツモした牌（最後の牌）を自動で捨てる
         const lastTileIndex = currentPlayer.hand.tiles.length - 1;

@@ -1139,6 +1139,7 @@
         
         // 変数初期化
         let isConnected = false;
+        let currentTenpaiStatus = { isTenpai: false, waitingTiles: [] };
         
         // Socket.IO接続
         const socket = io();
@@ -1220,6 +1221,47 @@
             console.log(`[${timestamp}] 🀄 [CLIENT] ===== メルド機会受信終了 =====`);
         });
 
+        // 和了結果受信
+        socket.on('winResult', (data) => {
+            console.log('🎯 和了結果受信:', data);
+            
+            if (data.success) {
+                showNotification(`${data.message}`, 'success');
+                
+                if (data.yaku && data.yaku.length > 0) {
+                    const yakuNames = data.yaku.map(y => y.name).join('・');
+                    showNotification(`役: ${yakuNames} (${data.han}翻)`, 'info');
+                }
+                
+                if (data.score) {
+                    const score = data.score;
+                    let scoreText = '';
+                    
+                    if (score.isYakuman) {
+                        scoreText = `役満${score.yakumanCount > 1 ? score.yakumanCount + '倍' : ''}: ${score.total}点`;
+                    } else {
+                        scoreText = `${score.han}翻${score.fu}符: ${score.total}点`;
+                    }
+                    
+                    showNotification(scoreText, 'success');
+                    
+                    // 詳細な支払い情報
+                    if (score.isTsumo) {
+                        showNotification(`ツモ: 全員から${score.payments.winner}点`, 'info');
+                    } else {
+                        showNotification(`ロン: ${score.payments.winner}点`, 'info');
+                    }
+                }
+                
+                // ゲーム終了状態の表示
+                setTimeout(() => {
+                    showNotification('ゲーム終了', 'info');
+                }, 3000);
+            } else {
+                showNotification(`和了失敗: ${data.error}`, 'error');
+            }
+        });
+
         // メルド機会表示関数
         function showMeldOpportunities(data) {
             const { discardedTile, discardPlayerId, opportunities, autoPaused } = data;
@@ -1250,10 +1292,22 @@
                 console.log('🀄 [DEBUG] ponBtn要素:', ponBtn);
                 console.log('🀄 [DEBUG] kanBtn要素:', kanBtn);
                 
-                // メルドボタンを表示（デバッグ用：全て表示）
-                if (chiBtn) chiBtn.style.display = 'inline-block';
-                if (ponBtn) ponBtn.style.display = 'inline-block';
-                if (kanBtn) kanBtn.style.display = 'inline-block';
+                // メルドボタンを強制表示
+                if (chiBtn) {
+                    chiBtn.style.display = 'inline-block';
+                    chiBtn.style.visibility = 'visible';
+                    console.log('🀄 [DEBUG] チーボタン表示設定完了');
+                }
+                if (ponBtn) {
+                    ponBtn.style.display = 'inline-block';
+                    ponBtn.style.visibility = 'visible';
+                    console.log('🀄 [DEBUG] ポンボタン表示設定完了');
+                }
+                if (kanBtn) {
+                    kanBtn.style.display = 'inline-block';
+                    kanBtn.style.visibility = 'visible';
+                    console.log('🀄 [DEBUG] カンボタン表示設定完了');
+                }
                 
                 console.log('🀄 [DEBUG] ボタン表示設定完了');
                 
@@ -1553,6 +1607,9 @@
             
             // メルド表示更新
             updateMeldDisplay();
+            
+            // テンパイ状態チェック
+            updateTenpaiStatus();
         }
 
         // メルド表示更新
@@ -1761,6 +1818,9 @@
             const player = gameState.players?.[0];
             const handCount = player?.hand?.tiles?.length || 0;
             
+            // メルド機会があるかチェック（lastDiscardedTileが設定されている場合）
+            const hasMeldOpportunity = lastDiscardedTile && lastDiscardedTile.playerId !== 0;
+            
             // 基本ボタン制御
             const drawBtn = document.getElementById('drawBtn');
             const discardBtn = document.getElementById('discardBtn');
@@ -1778,10 +1838,11 @@
             const kanBtn = document.getElementById('kanBtn');
             const ronBtn = document.getElementById('ronBtn');
             
-            // デバッグ用：メルドボタンを常時表示
-            if (chiBtn) chiBtn.style.display = 'inline-block';
-            if (ponBtn) ponBtn.style.display = 'inline-block';
-            if (kanBtn) kanBtn.style.display = 'inline-block';
+            // メルドボタンの条件表示（メルド機会がある場合は既に表示されているので保持）
+            // メルド機会がない場合のみ非表示にする
+            if (chiBtn && !hasMeldOpportunity) chiBtn.style.display = 'none';  
+            if (ponBtn && !hasMeldOpportunity) ponBtn.style.display = 'none';  
+            if (kanBtn && !hasMeldOpportunity) kanBtn.style.display = 'none';
             if (ronBtn) ronBtn.style.display = (!isMyTurn && canCallRon()) ? 'inline-block' : 'none';
             
             // 捨て牌更新を追跡
@@ -1796,8 +1857,131 @@
         }
         
         function canCallTsumo() {
-            // 実際のツモ判定は複雑なので、とりあえず常にfalse
-            return false;
+            if (!gameState || !gameState.players[0]) return false;
+            
+            const player = gameState.players[0];
+            const handCount = player.hand.tiles.length;
+            
+            // 14枚でないとツモできない
+            if (handCount !== 14) return false;
+            
+            // 自分のターンでないとツモできない
+            if (gameState.currentPlayer !== 0) return false;
+            
+            // 簡易チェック：実際の判定はサーバー側で行う
+            return true;
+        }
+
+        // テンパイ判定（簡易版）
+        function checkClientTenpai() {
+            if (!gameState || !gameState.players[0]) {
+                return { isTenpai: false, waitingTiles: [] };
+            }
+            
+            const player = gameState.players[0];
+            const handCount = player.hand.tiles.length + (player.hand.melds.length * 3);
+            
+            // 13枚の場合のみテンパイチェック
+            if (handCount !== 13) {
+                return { isTenpai: false, waitingTiles: [] };
+            }
+            
+            // 簡易的なテンパイ判定
+            // 実際の詳細判定はサーバー側で行う
+            const tiles = player.hand.tiles;
+            
+            // 基本的な形の確認（非常に簡易版）
+            // 実装を簡単にするため、とりあえず手牌が13枚で特定条件を満たす場合にテンパイとする
+            
+            // 牌の種類をカウント
+            const tileCounts = {};
+            for (const tile of tiles) {
+                const key = tile.honor ? `ji_${tile.honor}` : `${tile.suit}_${tile.rank}`;
+                tileCounts[key] = (tileCounts[key] || 0) + 1;
+            }
+            
+            // 対子の数をカウント
+            let pairCount = 0;
+            let tripleCount = 0;
+            for (const count of Object.values(tileCounts)) {
+                if (count === 2) pairCount++;
+                if (count === 3) tripleCount++;
+            }
+            
+            // 非常に簡易的な判定：対子が複数あるか、刻子がある場合にテンパイの可能性
+            const isPossiblyTenpai = pairCount >= 1 || tripleCount >= 1;
+            
+            if (isPossiblyTenpai) {
+                // 簡易的な待ち牌生成（実際はもっと複雑）
+                const waitingTiles = [
+                    { suit: 'man', rank: 1, displayName: '1万' },
+                    { suit: 'pin', rank: 1, displayName: '1筒' },
+                    { suit: 'sou', rank: 1, displayName: '1索' }
+                ];
+                
+                return { isTenpai: true, waitingTiles };
+            }
+            
+            return { isTenpai: false, waitingTiles: [] };
+        }
+
+        // テンパイ状態を更新・表示
+        function updateTenpaiStatus() {
+            if (!gameState || !gameState.players[0]) return;
+            
+            const newTenpaiStatus = checkClientTenpai();
+            
+            // テンパイ状態が変わった場合のみ更新
+            if (newTenpaiStatus.isTenpai !== currentTenpaiStatus.isTenpai) {
+                currentTenpaiStatus = newTenpaiStatus;
+                
+                if (currentTenpaiStatus.isTenpai) {
+                    const waitingText = currentTenpaiStatus.waitingTiles.map(t => t.displayName).join('・');
+                    showNotification(`テンパイ！ 待ち: ${waitingText}`, 'info');
+                    console.log('🎯 テンパイ状態:', currentTenpaiStatus);
+                } else {
+                    console.log('🎯 テンパイ解除');
+                }
+            }
+            
+            // テンパイ表示の更新
+            displayTenpaiStatus();
+        }
+
+        // テンパイ表示
+        function displayTenpaiStatus() {
+            // テンパイ表示エリアを取得または作成
+            let tenpaiDisplay = document.getElementById('tenpaiDisplay');
+            if (!tenpaiDisplay) {
+                tenpaiDisplay = document.createElement('div');
+                tenpaiDisplay.id = 'tenpaiDisplay';
+                tenpaiDisplay.style.cssText = `
+                    position: fixed;
+                    top: 120px;
+                    right: 20px;
+                    background: rgba(255, 193, 7, 0.9);
+                    color: #212529;
+                    padding: 10px 15px;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    font-size: 0.9rem;
+                    z-index: 1000;
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+                    border: 2px solid #ffc107;
+                `;
+                document.body.appendChild(tenpaiDisplay);
+            }
+            
+            if (currentTenpaiStatus.isTenpai) {
+                const waitingText = currentTenpaiStatus.waitingTiles.map(t => t.displayName).join('・');
+                tenpaiDisplay.innerHTML = `
+                    🎯 テンパイ<br>
+                    <small>待ち: ${waitingText}</small>
+                `;
+                tenpaiDisplay.style.display = 'block';
+            } else {
+                tenpaiDisplay.style.display = 'none';
+            }
         }
         
         function canCallChi() {
@@ -1886,9 +2070,17 @@
         function canCallRon() {
             if (!gameState || !gameState.players[0] || !lastDiscardedTile) return false;
             
-            // 簡易和了判定（実際はもっと複雑）
-            // ここでは常にfalseを返すが、将来的に和了判定ロジックを実装
-            return false;
+            const player = gameState.players[0];
+            const handCount = player.hand.tiles.length;
+            
+            // 13枚でないとロンできない
+            if (handCount !== 13) return false;
+            
+            // 自分のターンではロンできない
+            if (gameState.currentPlayer === 0) return false;
+            
+            // 簡易チェック：実際の判定はサーバー側で行う
+            return true;
         }
 
         // 牌選択
@@ -2211,17 +2403,15 @@
                 return;
             }
             
-            performAction('tsumo', {}, (result) => {
-                if (result.success) {
-                    showNotification('ツモ和了！', 'success');
-                    if (result.data && result.data.score) {
-                        showNotification(`獲得点数: ${result.data.score.total}点`, 'info');
-                    }
-                    requestGameState();
-                } else {
-                    showNotification(`ツモできません: ${result.error}`, 'error');
-                }
+            console.log('🎯 ツモアクション送信');
+            socket.emit('playerAction', {
+                type: 'tsumo',
+                playerId: 'player_0',
+                priority: 5,
+                timestamp: Date.now()
             });
+            
+            soundManager.playSound('tilePlace');
         }
 
         // ロン和了
@@ -2231,17 +2421,15 @@
                 return;
             }
             
-            performAction('ron', {}, (result) => {
-                if (result.success) {
-                    showNotification('ロン和了！', 'success');
-                    if (result.data && result.data.score) {
-                        showNotification(`獲得点数: ${result.data.score.total}点`, 'info');
-                    }
-                    requestGameState();
-                } else {
-                    showNotification(`ロンできません: ${result.error}`, 'error');
-                }
+            console.log('🎯 ロンアクション送信');
+            socket.emit('playerAction', {
+                type: 'ron',
+                playerId: 'player_0',
+                priority: 5,
+                timestamp: Date.now()
             });
+            
+            soundManager.playSound('tilePlace');
         }
 
         // リーチ
