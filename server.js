@@ -1434,6 +1434,27 @@ function checkMeldOpportunities(socket, gameState, discardedTile, discardPlayerI
     if (i === discardPlayerId) continue; // 捨て牌したプレイヤーはスキップ
     
     const player = gameState.players[i];
+    
+    // まずロン可能性をチェック（CPUの場合は自動実行）
+    const tilesWithRon = [...player.hand.tiles, discardedTile];
+    const winResult = checkWin(tilesWithRon, player.hand.melds, player, discardedTile, false);
+    if (winResult.canWin) {
+      if (player.type === 'cpu') {
+        logWithTime(`🤖 [RON] CPU${i}(${player.name})がロン和了判定！`);
+        
+        // CPUロン和了処理
+        const cpuSocket = { gameId: socket.gameId, emit: () => {} }; // ダミーソケット
+        handleRon(cpuSocket, gameState, {
+          playerId: `player_${i}`,
+          timestamp: Date.now()
+        });
+        return; // ロン和了したので処理終了
+      } else {
+        logWithTime(`👤 [RON] プレイヤー${i}にロン機会あり`);
+        // 人間プレイヤーの場合はボタン表示制御のみ（既存のcanCallRon処理に委ねる）
+      }
+    }
+    
     const opportunities = {
       playerId: i,
       playerType: player.type,
@@ -1605,6 +1626,20 @@ function startCpuAutoGame(gameId) {
       // 手牌が適切な枚数+1の場合は捨て牌（ツモ後の状態）
       const expectedDiscardCount = expectedTileCount + 1;
       if (currentPlayer.hand.tiles.length === expectedDiscardCount) {
+        // まず和了可能かチェック
+        const winResult = checkWin(currentPlayer.hand.tiles, currentPlayer.hand.melds, currentPlayer, null, true);
+        if (winResult.canWin) {
+          console.log(`🤖 [TSUMO] CPU${currentPlayer.playerId}(${currentPlayer.name})がツモ和了判定！`);
+          
+          // CPUツモ和了処理
+          const cpuSocket = { gameId, emit: () => {} }; // ダミーソケット
+          handleTsumo(cpuSocket, currentState, {
+            playerId: `player_${currentPlayer.playerId}`,
+            timestamp: Date.now()
+          });
+          return; // 和了したので処理終了
+        }
+        
         console.log(`🤖 [DEBUG] CPUが捨て牌を実行（現在${currentPlayer.hand.tiles.length}枚）`);
         const randomIndex = Math.floor(Math.random() * currentPlayer.hand.tiles.length);
         const tileToDiscard = currentPlayer.hand.tiles[randomIndex];

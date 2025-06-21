@@ -1868,8 +1868,8 @@
             // 自分のターンでないとツモできない
             if (gameState.currentPlayer !== 0) return false;
             
-            // 簡易チェック：実際の判定はサーバー側で行う
-            return true;
+            // 実際の和了形チェック
+            return checkClientWinning(player.hand.tiles, player.hand.melds);
         }
 
         // テンパイ判定（簡易版）
@@ -2079,8 +2079,125 @@
             // 自分のターンではロンできない
             if (gameState.currentPlayer === 0) return false;
             
-            // 簡易チェック：実際の判定はサーバー側で行う
-            return true;
+            // 捨て牌を加えた14枚での和了形チェック
+            const tilesWithRon = [...player.hand.tiles, lastDiscardedTile.tile];
+            return checkClientWinning(tilesWithRon, player.hand.melds);
+        }
+
+        // クライアント側和了形チェック（簡易版）
+        function checkClientWinning(tiles, melds = []) {
+            if (!tiles || tiles.length === 0) return false;
+            
+            // メルドを含めた全牌数が14枚になるかチェック
+            const totalTiles = tiles.length + (melds.length * 3);
+            if (totalTiles !== 14) return false;
+            
+            // 基本和了形チェック（4面子1雀頭）
+            if (checkClientBasicWin(tiles, melds)) return true;
+            
+            // 七対子チェック（メルドがない場合のみ）
+            if (melds.length === 0 && checkClientChiitoi(tiles)) return true;
+            
+            return false;
+        }
+
+        // 基本和了形チェック（簡易版）
+        function checkClientBasicWin(tiles, melds) {
+            // 手牌をソート
+            const sortedTiles = [...tiles].sort((a, b) => {
+                if (a.suit !== b.suit) return a.suit.localeCompare(b.suit);
+                return a.rank - b.rank;
+            });
+            
+            // 再帰的に面子を取り除いて雀頭が残るかチェック
+            return findMentsusAndJantou(sortedTiles, []);
+        }
+
+        // 面子と雀頭の組み合わせを探す再帰関数
+        function findMentsusAndJantou(tiles, usedGroups) {
+            if (tiles.length === 0) return usedGroups.length > 0;
+            if (tiles.length < 2) return false;
+            
+            // 雀頭を探す
+            if (tiles.length >= 2 && tiles[0].suit === tiles[1].suit && tiles[0].rank === tiles[1].rank) {
+                const remaining = tiles.slice(2);
+                if (remaining.length === 0) return true; // 雀頭のみで終了
+                
+                // 残りの牌で面子を作れるかチェック
+                if (findAllMentsus(remaining)) return true;
+            }
+            
+            // 先頭から面子を作って再帰
+            // 刻子チェック
+            if (tiles.length >= 3 && 
+                tiles[0].suit === tiles[1].suit && tiles[0].rank === tiles[1].rank &&
+                tiles[1].suit === tiles[2].suit && tiles[1].rank === tiles[2].rank) {
+                const remaining = tiles.slice(3);
+                if (findMentsusAndJantou(remaining, [...usedGroups, 'kotsu'])) return true;
+            }
+            
+            // 順子チェック（数牌のみ）
+            if (tiles[0].suit !== 'honors' && tiles.length >= 3) {
+                const tile1 = tiles[0];
+                const tile2Index = tiles.findIndex(t => t.suit === tile1.suit && t.rank === tile1.rank + 1);
+                const tile3Index = tiles.findIndex(t => t.suit === tile1.suit && t.rank === tile1.rank + 2);
+                
+                if (tile2Index !== -1 && tile3Index !== -1) {
+                    const remaining = [...tiles];
+                    remaining.splice(tile3Index, 1);
+                    remaining.splice(tile2Index > tile3Index ? tile2Index - 1 : tile2Index, 1);
+                    remaining.splice(0, 1);
+                    
+                    if (findMentsusAndJantou(remaining, [...usedGroups, 'shuntsu'])) return true;
+                }
+            }
+            
+            return false;
+        }
+
+        // すべて面子で構成されているかチェック
+        function findAllMentsus(tiles) {
+            if (tiles.length === 0) return true;
+            if (tiles.length % 3 !== 0) return false;
+            
+            // 刻子チェック
+            if (tiles.length >= 3 && 
+                tiles[0].suit === tiles[1].suit && tiles[0].rank === tiles[1].rank &&
+                tiles[1].suit === tiles[2].suit && tiles[1].rank === tiles[2].rank) {
+                return findAllMentsus(tiles.slice(3));
+            }
+            
+            // 順子チェック
+            if (tiles[0].suit !== 'honors' && tiles.length >= 3) {
+                const tile1 = tiles[0];
+                const tile2Index = tiles.findIndex(t => t.suit === tile1.suit && t.rank === tile1.rank + 1);
+                const tile3Index = tiles.findIndex(t => t.suit === tile1.suit && t.rank === tile1.rank + 2);
+                
+                if (tile2Index !== -1 && tile3Index !== -1) {
+                    const remaining = [...tiles];
+                    remaining.splice(tile3Index, 1);
+                    remaining.splice(tile2Index > tile3Index ? tile2Index - 1 : tile2Index, 1);
+                    remaining.splice(0, 1);
+                    
+                    return findAllMentsus(remaining);
+                }
+            }
+            
+            return false;
+        }
+
+        // 七対子チェック
+        function checkClientChiitoi(tiles) {
+            if (tiles.length !== 14) return false;
+            
+            const tileCounts = {};
+            for (const tile of tiles) {
+                const key = `${tile.suit}_${tile.rank}`;
+                tileCounts[key] = (tileCounts[key] || 0) + 1;
+            }
+            
+            const counts = Object.values(tileCounts);
+            return counts.length === 7 && counts.every(count => count === 2);
         }
 
         // 牌選択
