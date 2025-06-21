@@ -1466,12 +1466,18 @@ function checkMeldOpportunities(socket, gameState, discardedTile, discardPlayerI
     // ポン・カンチェック（全プレイヤー対象）
     const sameTypeCount = player.hand.tiles.filter(tile => isSameTileType(tile, discardedTile)).length;
     if (sameTypeCount >= 2) {
-      opportunities.pon = true;
-      logWithTime(`✅ [PON] プレイヤー${i}がポン可能: ${discardedTile.displayName}`);
+      const shouldPon = player.type === 'cpu' ? shouldCpuCallPon(player, discardedTile, gameState) : true;
+      if (shouldPon) {
+        opportunities.pon = true;
+        logWithTime(`✅ [PON] プレイヤー${i}がポン可能: ${discardedTile.displayName}`);
+      }
     }
     if (sameTypeCount >= 3) {
-      opportunities.kan = true;
-      logWithTime(`✅ [KAN] プレイヤー${i}がカン可能: ${discardedTile.displayName}`);
+      const shouldKan = player.type === 'cpu' ? shouldCpuCallKan(player, discardedTile, gameState) : true;
+      if (shouldKan) {
+        opportunities.kan = true;
+        logWithTime(`✅ [KAN] プレイヤー${i}がカン可能: ${discardedTile.displayName}`);
+      }
     }
     
     // チーチェック（下家のみ：捨て牌プレイヤーの次のプレイヤー）
@@ -1480,8 +1486,11 @@ function checkMeldOpportunities(socket, gameState, discardedTile, discardPlayerI
       // 数牌の場合のみチー可能
       const chiPossible = checkChiPossibility(player.hand.tiles, discardedTile);
       if (chiPossible) {
-        opportunities.chi = true;
-        logWithTime(`✅ [CHI] プレイヤー${i}がチー可能: ${discardedTile.displayName}`);
+        const shouldChi = player.type === 'cpu' ? shouldCpuCallChi(player, discardedTile, gameState) : true;
+        if (shouldChi) {
+          opportunities.chi = true;
+          logWithTime(`✅ [CHI] プレイヤー${i}がチー可能: ${discardedTile.displayName}`);
+        }
       }
     }
     
@@ -1640,9 +1649,8 @@ function startCpuAutoGame(gameId) {
           return; // 和了したので処理終了
         }
         
-        console.log(`🤖 [DEBUG] CPUが捨て牌を実行（現在${currentPlayer.hand.tiles.length}枚）`);
-        const randomIndex = Math.floor(Math.random() * currentPlayer.hand.tiles.length);
-        const tileToDiscard = currentPlayer.hand.tiles[randomIndex];
+        console.log(`🤖 [DEBUG] CPUが戦略的打牌を実行（現在${currentPlayer.hand.tiles.length}枚）`);
+        const tileToDiscard = selectBestDiscardTile(currentPlayer, gameState);
         
         // 牌を捨てる
         handleDiscard({ gameId }, currentState, { tileId: tileToDiscard.id });
@@ -1672,6 +1680,314 @@ function startCpuAutoGame(gameId) {
   
   console.log(`🤖 [DEBUG] 最初のCPUターンをスケジュール（${gameState.cpuAutoSpeed || 1000}ms後）`);
   setTimeout(cpuTurn, gameState.cpuAutoSpeed || 1000);
+}
+
+// =====================================
+// AI戦略的打牌システム
+// =====================================
+
+// CPUの最適な捨て牌を選択
+function selectBestDiscardTile(player, gameState) {
+  logWithTime(`🧠 [AI] ${player.name}の戦略的打牌分析開始`);
+  
+  const handTiles = player.hand.tiles;
+  const candidates = [];
+  
+  // 各牌について捨て牌価値を評価
+  for (let i = 0; i < handTiles.length; i++) {
+    const tile = handTiles[i];
+    const score = evaluateDiscardTile(tile, handTiles, player, gameState);
+    candidates.push({
+      tile: tile,
+      index: i,
+      score: score
+    });
+  }
+  
+  // スコアでソート（高いほど捨てやすい）
+  candidates.sort((a, b) => b.score - a.score);
+  
+  const bestCandidate = candidates[0];
+  logWithTime(`🧠 [AI] ${player.name}の選択: ${bestCandidate.tile.displayName} (スコア: ${bestCandidate.score})`);
+  
+  return bestCandidate.tile;
+}
+
+// 捨て牌の評価スコア計算
+function evaluateDiscardTile(tile, handTiles, player, gameState) {
+  let score = 0;
+  
+  // 1. 孤立牌の優先度を上げる（捨てやすい）
+  score += evaluateIsolationValue(tile, handTiles) * 100;
+  
+  // 2. 危険牌の評価（他プレイヤーに当たりやすい牌は避ける）
+  score += evaluateDangerLevel(tile, gameState) * 50;
+  
+  // 3. 手牌効率の評価（面子構成に不要な牌）
+  score += evaluateHandEfficiency(tile, handTiles) * 80;
+  
+  // 4. 字牌の評価
+  score += evaluateHonorTiles(tile, player, gameState) * 60;
+  
+  // 5. ドラの評価（ドラは基本的に残したい）
+  score += evaluateDoraValue(tile, gameState) * -150;
+  
+  return score;
+}
+
+// 孤立牌の評価（周囲に関連牌がない牌は捨てやすい）
+function evaluateIsolationValue(tile, handTiles) {
+  if (tile.suit === 'honors') {
+    // 字牌の場合、同種牌の数で判定
+    const sameCount = handTiles.filter(t => isSameTileType(t, tile)).length;
+    return sameCount === 1 ? 10 : -sameCount * 2; // 1枚なら孤立、複数あれば価値あり
+  }
+  
+  // 数牌の場合、前後の牌があるかチェック
+  let connectionCount = 0;
+  const rank = tile.rank;
+  const suit = tile.suit;
+  
+  // 前後2段階まで関連牌をチェック
+  for (let offset = -2; offset <= 2; offset++) {
+    if (offset === 0) continue;
+    const targetRank = rank + offset;
+    if (targetRank >= 1 && targetRank <= 9) {
+      const hasRelated = handTiles.some(t => t.suit === suit && t.rank === targetRank);
+      if (hasRelated) connectionCount++;
+    }
+  }
+  
+  // 関連牌が少ないほど孤立度が高い
+  return Math.max(0, 5 - connectionCount);
+}
+
+// 危険牌レベルの評価
+function evaluateDangerLevel(tile, gameState) {
+  let dangerScore = 0;
+  
+  // 他プレイヤーの捨て牌を確認
+  for (const player of gameState.players) {
+    if (!player.discards) continue;
+    
+    // 同種牌が既に捨てられている場合は比較的安全
+    const alreadyDiscarded = player.discards.some(d => isSameTileType(d, tile));
+    if (alreadyDiscarded) {
+      dangerScore += 2; // 安全度アップ
+    }
+    
+    // リーチプレイヤーがいる場合の危険度評価
+    if (player.hand.riichi) {
+      // 中張牌（2-8）は危険度高め
+      if (tile.suit !== 'honors' && tile.rank >= 2 && tile.rank <= 8) {
+        dangerScore -= 3;
+      }
+      // 1,9牌と字牌は比較的安全
+      if (tile.suit === 'honors' || tile.rank === 1 || tile.rank === 9) {
+        dangerScore += 1;
+      }
+    }
+  }
+  
+  return dangerScore;
+}
+
+// 手牌効率の評価
+function evaluateHandEfficiency(tile, handTiles) {
+  // この牌を除いた手牌で面子候補がいくつ作れるかを評価
+  const remainingTiles = handTiles.filter(t => t.id !== tile.id);
+  const mentsuCandidates = countMentsuCandidates(remainingTiles);
+  
+  // 面子候補が多いほど、この牌は不要（捨てやすい）
+  return mentsuCandidates;
+}
+
+// 面子候補の数をカウント
+function countMentsuCandidates(tiles) {
+  let candidates = 0;
+  
+  // 対子・刻子候補
+  const tileCounts = {};
+  for (const tile of tiles) {
+    const key = `${tile.suit}_${tile.rank}`;
+    tileCounts[key] = (tileCounts[key] || 0) + 1;
+  }
+  
+  for (const count of Object.values(tileCounts)) {
+    if (count >= 2) candidates += Math.floor(count / 2);
+  }
+  
+  // 順子候補（数牌のみ）
+  for (const tile of tiles) {
+    if (tile.suit === 'honors') continue;
+    
+    let sequenceLength = 1;
+    let currentRank = tile.rank;
+    
+    // 連続する牌をカウント
+    while (currentRank < 9) {
+      const nextExists = tiles.some(t => t.suit === tile.suit && t.rank === currentRank + 1);
+      if (!nextExists) break;
+      sequenceLength++;
+      currentRank++;
+    }
+    
+    if (sequenceLength >= 3) {
+      candidates += Math.floor(sequenceLength / 3);
+    }
+  }
+  
+  return candidates;
+}
+
+// 字牌の特別評価
+function evaluateHonorTiles(tile, player, gameState) {
+  if (tile.suit !== 'honors') return 0;
+  
+  let honorScore = 0;
+  
+  // 役牌（三元牌）は価値が高い
+  if (tile.rank >= 5) { // 白=5, 發=6, 中=7
+    honorScore -= 2; // 残したい
+  }
+  
+  // 自風・場風は価値が高い
+  const isPlayerWind = (tile.rank === 1 && player.wind === 'east') ||
+                      (tile.rank === 2 && player.wind === 'south') ||
+                      (tile.rank === 3 && player.wind === 'west') ||
+                      (tile.rank === 4 && player.wind === 'north');
+  
+  if (isPlayerWind) {
+    honorScore -= 1; // 残したい
+  }
+  
+  return honorScore;
+}
+
+// ドラの評価
+function evaluateDoraValue(tile, gameState) {
+  if (!gameState.dora) return 0;
+  
+  // ドラ表示牌から実際のドラを判定
+  const doraIndicator = gameState.dora;
+  let actualDora;
+  
+  if (doraIndicator.suit === 'honors') {
+    // 字牌の場合
+    if (doraIndicator.rank <= 4) {
+      // 風牌: 東→南→西→北→東...
+      actualDora = { suit: 'honors', rank: (doraIndicator.rank % 4) + 1 };
+    } else {
+      // 三元牌: 白→發→中→白...
+      actualDora = { suit: 'honors', rank: ((doraIndicator.rank - 5) % 3) + 5 };
+    }
+  } else {
+    // 数牌の場合: 9→1, その他は+1
+    actualDora = {
+      suit: doraIndicator.suit,
+      rank: doraIndicator.rank === 9 ? 1 : doraIndicator.rank + 1
+    };
+  }
+  
+  // このタイルがドラかチェック
+  if (tile.suit === actualDora.suit && tile.rank === actualDora.rank) {
+    return 1; // ドラなので残したい（負のスコア）
+  }
+  
+  return 0;
+}
+
+// CPUメルド判定関数
+function shouldCpuCallPon(player, discardedTile, gameState) {
+  // 役牌の場合は積極的にポン
+  if (discardedTile.suit === 'honors') {
+    if (discardedTile.rank >= 5) return true; // 三元牌
+    
+    // 自風・場風の場合
+    const isPlayerWind = (discardedTile.rank === 1 && player.wind === 'east') ||
+                        (discardedTile.rank === 2 && player.wind === 'south') ||
+                        (discardedTile.rank === 3 && player.wind === 'west') ||
+                        (discardedTile.rank === 4 && player.wind === 'north');
+    if (isPlayerWind) return true;
+  }
+  
+  // テンパイに近い場合は慎重に
+  const tenpaiResult = isNearTenpai(player.hand.tiles, player.hand.melds);
+  if (tenpaiResult.isClose) {
+    return Math.random() < 0.3; // 30%の確率でポン
+  }
+  
+  // 通常は50%の確率でポン
+  return Math.random() < 0.5;
+}
+
+function shouldCpuCallChi(player, discardedTile, gameState) {
+  // チーは手牌効率を重視
+  const efficiency = evaluateChiEfficiency(player.hand.tiles, discardedTile);
+  
+  // 効率が良い場合のみチー
+  return efficiency > 0.6;
+}
+
+function shouldCpuCallKan(player, discardedTile, gameState) {
+  // 役牌カンは積極的
+  if (discardedTile.suit === 'honors' && discardedTile.rank >= 5) {
+    return true;
+  }
+  
+  // ドラの場合も積極的
+  if (isDiscardedTileDora(discardedTile, gameState)) {
+    return true;
+  }
+  
+  // 通常は30%の確率
+  return Math.random() < 0.3;
+}
+
+// テンパイに近いかチェック
+function isNearTenpai(tiles, melds) {
+  // 簡易的な判定
+  const totalTiles = tiles.length + (melds.length * 3);
+  if (totalTiles < 11) return { isClose: false };
+  
+  // 面子候補の数で判定
+  const candidates = countMentsuCandidates(tiles);
+  return { isClose: candidates >= 3 };
+}
+
+// チーの効率性評価
+function evaluateChiEfficiency(tiles, discardedTile) {
+  // この牌をチーした場合の手牌効率を計算
+  // 簡易版：中張牌（4-6）は効率が良い
+  if (discardedTile.suit !== 'honors' && 
+      discardedTile.rank >= 4 && discardedTile.rank <= 6) {
+    return 0.8;
+  }
+  
+  return 0.4;
+}
+
+// ドラかどうかチェック
+function isDiscardedTileDora(tile, gameState) {
+  if (!gameState.dora) return false;
+  
+  const doraIndicator = gameState.dora;
+  let actualDora;
+  
+  if (doraIndicator.suit === 'honors') {
+    if (doraIndicator.rank <= 4) {
+      actualDora = { suit: 'honors', rank: (doraIndicator.rank % 4) + 1 };
+    } else {
+      actualDora = { suit: 'honors', rank: ((doraIndicator.rank - 5) % 3) + 5 };
+    }
+  } else {
+    actualDora = {
+      suit: doraIndicator.suit,
+      rank: doraIndicator.rank === 9 ? 1 : doraIndicator.rank + 1
+    };
+  }
+  
+  return tile.suit === actualDora.suit && tile.rank === actualDora.rank;
 }
 
 server.listen(PORT, () => {
