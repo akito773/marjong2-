@@ -19,6 +19,7 @@
             color: #212529;
             height: 100vh;
             overflow: auto;
+            transition: all 0.3s ease;
         }
         
         /* デフォルト: 1920×1080対応 */
@@ -678,34 +679,58 @@
         }
 
         .tile {
-            background: white;
+            background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
             border: 2px solid #dee2e6;
-            border-radius: 6px;
+            border-radius: 8px;
             padding: 8px 6px;
             font-size: 18px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             width: 40px;
             height: 50px;
             display: flex;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
             user-select: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .tile::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+            transition: left 0.5s;
         }
 
         .tile:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-            background: #f8f9fa;
+            transform: translateY(-4px) scale(1.05);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+            background: linear-gradient(145deg, #ffffff 0%, #e3f2fd 100%);
+            border-color: #2196f3;
+        }
+
+        .tile:hover::before {
+            left: 100%;
         }
 
         .tile.selected {
-            background: #fff3cd;
-            border-color: #ffc107;
-            transform: translateY(-6px);
-            box-shadow: 0 6px 12px rgba(255, 193, 7, 0.4);
+            background: linear-gradient(145deg, #fff8e1 0%, #ffecb3 100%);
+            border-color: #ff9800;
+            transform: translateY(-8px) scale(1.1);
+            box-shadow: 0 12px 20px rgba(255, 152, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+            animation: selectedPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes selectedPulse {
+            0%, 100% { box-shadow: 0 12px 20px rgba(255, 152, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.9); }
+            50% { box-shadow: 0 12px 20px rgba(255, 152, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.9); }
         }
 
         .tile.red {
@@ -807,22 +832,69 @@
         .btn {
             padding: 8px 16px;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             font-size: 0.9rem;
+            position: relative;
+            overflow: hidden;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
-        .btn-primary { background: #007bff; color: white; }
-        .btn-danger { background: #dc3545; color: white; }
-        .btn-warning { background: #ffc107; color: #212529; }
-        .btn-success { background: #198754; color: white; }
-        .btn-info { background: #0dcaf0; color: #212529; }
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.3s, height 0.3s;
+        }
+
+        .btn:active::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn-primary { 
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); 
+            color: white; 
+            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+        }
+        .btn-danger { 
+            background: linear-gradient(135deg, #dc3545 0%, #a71e2a 100%); 
+            color: white; 
+            box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+        }
+        .btn-warning { 
+            background: linear-gradient(135deg, #ffc107 0%, #d39e00 100%); 
+            color: #212529; 
+            box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+        }
+        .btn-success { 
+            background: linear-gradient(135deg, #198754 0%, #0f5132 100%); 
+            color: white; 
+            box-shadow: 0 4px 12px rgba(25, 135, 84, 0.3);
+        }
+        .btn-info { 
+            background: linear-gradient(135deg, #0dcaf0 0%, #087990 100%); 
+            color: #212529; 
+            box-shadow: 0 4px 12px rgba(13, 202, 240, 0.3);
+        }
 
         .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0) scale(0.98);
+            transition: all 0.1s;
         }
 
         /* 情報パネル */
@@ -878,33 +950,110 @@
             position: fixed;
             top: 80px;
             left: 50%;
-            transform: translateX(-50%);
-            padding: 12px 24px;
-            border-radius: 8px;
+            transform: translateX(-50%) translateY(-100px);
+            padding: 16px 28px;
+            border-radius: 12px;
             font-weight: 600;
             z-index: 1000;
             opacity: 0;
-            transition: opacity 0.3s ease;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            min-width: 200px;
+            text-align: center;
         }
 
         .notification.show {
             opacity: 1;
+            transform: translateX(-50%) translateY(0);
+            animation: notificationSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .notification.success {
-            background: #d1edff;
+            background: linear-gradient(135deg, rgba(209, 237, 255, 0.95) 0%, rgba(184, 230, 255, 0.95) 100%);
             color: #0c63e4;
+            border-color: rgba(12, 99, 228, 0.3);
         }
 
         .notification.error {
-            background: #f8d7da;
+            background: linear-gradient(135deg, rgba(248, 215, 218, 0.95) 0%, rgba(245, 183, 191, 0.95) 100%);
             color: #721c24;
+            border-color: rgba(114, 28, 36, 0.3);
         }
 
         .notification.warning {
-            background: #fff3cd;
+            background: linear-gradient(135deg, rgba(255, 243, 205, 0.95) 0%, rgba(255, 235, 156, 0.95) 100%);
             color: #856404;
+            border-color: rgba(133, 100, 4, 0.3);
         }
+
+        .notification.info {
+            background: linear-gradient(135deg, rgba(209, 236, 241, 0.95) 0%, rgba(178, 222, 235, 0.95) 100%);
+            color: #0c5460;
+            border-color: rgba(12, 84, 96, 0.3);
+        }
+
+        @keyframes notificationSlideIn {
+            from {
+                transform: translateX(-50%) translateY(-100px) scale(0.8);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(-50%) translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* 特別なエフェクト */
+        @keyframes winCelebration {
+            0% { transform: scale(1) rotate(0deg); }
+            25% { transform: scale(1.1) rotate(5deg); }
+            50% { transform: scale(1.2) rotate(-5deg); }
+            75% { transform: scale(1.1) rotate(3deg); }
+            100% { transform: scale(1) rotate(0deg); }
+        }
+
+        @keyframes riichiGlow {
+            0%, 100% { box-shadow: 0 0 10px rgba(255, 0, 0, 0.5); }
+            50% { box-shadow: 0 0 30px rgba(255, 0, 0, 0.8); }
+        }
+
+        @keyframes confetti {
+            0% { transform: translateY(-100vh) rotate(0deg); }
+            100% { transform: translateY(100vh) rotate(360deg); }
+        }
+
+        .win-celebration {
+            animation: winCelebration 0.8s ease-in-out;
+        }
+
+        .riichi-glow {
+            animation: riichiGlow 2s ease-in-out infinite;
+        }
+
+        .confetti-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #ff6b6b;
+            animation: confetti 3s linear infinite;
+        }
+
+        .confetti:nth-child(2n) { background: #4ecdc4; }
+        .confetti:nth-child(3n) { background: #45b7d1; }
+        .confetti:nth-child(4n) { background: #96ceb4; }
+        .confetti:nth-child(5n) { background: #feca57; }
 
         /* レスポンシブ */
         @media (max-width: 768px) {
@@ -1226,6 +1375,9 @@
             console.log('🎯 和了結果受信:', data);
             
             if (data.success) {
+                // 勝利エフェクトを実行
+                triggerWinCelebration(data);
+                
                 showNotification(`${data.message}`, 'success');
                 
                 if (data.yaku && data.yaku.length > 0) {
@@ -1239,6 +1391,7 @@
                     
                     if (score.isYakuman) {
                         scoreText = `役満${score.yakumanCount > 1 ? score.yakumanCount + '倍' : ''}: ${score.total}点`;
+                        triggerYakumanCelebration(); // 役満特別エフェクト
                     } else {
                         scoreText = `${score.han}翻${score.fu}符: ${score.total}点`;
                     }
@@ -1255,11 +1408,59 @@
                 
                 // ゲーム終了状態の表示
                 setTimeout(() => {
-                    showNotification('ゲーム終了', 'info');
+                    showNotification('次局準備中...', 'info');
                 }, 3000);
             } else {
                 showNotification(`和了失敗: ${data.error}`, 'error');
             }
+        });
+
+        // リーチ宣言受信
+        socket.on('riichiDeclared', (data) => {
+            console.log('🔥 リーチ宣言受信:', data);
+            
+            if (data.success) {
+                // リーチエフェクトを実行
+                triggerRiichiEffect(data.playerId);
+                
+                showNotification(`${data.playerName}がリーチ！`, 'warning');
+                
+                // 供託情報表示
+                if (data.kyotaku > 0) {
+                    showNotification(`供託: ${data.kyotaku}本`, 'info');
+                }
+            }
+        });
+
+        // 新ラウンド開始受信
+        socket.on('newRound', (data) => {
+            console.log('🆕 新ラウンド開始:', data);
+            
+            showNotification(`${data.wind}${data.roundNumber}局 ${data.honba}本場開始`, 'info');
+            
+            // 配牌アニメーション（少し遅延させて実行）
+            setTimeout(() => {
+                animateTileDistribution();
+            }, 500);
+        });
+
+        // ゲーム終了受信
+        socket.on('gameEnd', (data) => {
+            console.log('🎊 ゲーム終了:', data);
+            
+            // 最終順位表示
+            let rankingText = '🏆 最終結果 🏆\n';
+            data.finalRanking.forEach(player => {
+                rankingText += `${player.rank}位: ${player.name} (${player.score}点)\n`;
+            });
+            
+            showNotification('ゲーム終了！', 'success');
+            
+            // 特別な終了エフェクト
+            setTimeout(() => {
+                flashBackground('#4CAF50', 2000);
+                createConfetti();
+            }, 1000);
         });
 
         // メルド機会表示関数
@@ -3285,6 +3486,158 @@
             setTimeout(() => {
                 notification.classList.remove('show');
             }, 3000);
+        }
+
+        // =====================================
+        // アニメーション・エフェクト関数
+        // =====================================
+
+        // 勝利セレブレーション
+        function triggerWinCelebration(data) {
+            console.log('🎊 勝利セレブレーション開始');
+            
+            // 自分の勝利の場合
+            if (data.winner === 0) {
+                // 手牌エリアにセレブレーションエフェクト
+                const handArea = document.getElementById('hand0');
+                if (handArea) {
+                    handArea.classList.add('win-celebration');
+                    setTimeout(() => {
+                        handArea.classList.remove('win-celebration');
+                    }, 800);
+                }
+                
+                // 紙吹雪エフェクト
+                createConfetti();
+                
+                // 勝利音効果
+                soundManager.playSound('win');
+            }
+            
+            // 背景フラッシュエフェクト
+            flashBackground('#4CAF50', 500);
+        }
+
+        // 役満特別セレブレーション
+        function triggerYakumanCelebration() {
+            console.log('🌟 役満セレブレーション開始');
+            
+            // より派手な紙吹雪
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => createConfetti(), i * 200);
+            }
+            
+            // 黄金の背景フラッシュ
+            flashBackground('#FFD700', 1000);
+            
+            // 画面全体の祝賀エフェクト
+            const body = document.body;
+            body.style.animation = 'winCelebration 1s ease-in-out';
+            setTimeout(() => {
+                body.style.animation = '';
+            }, 1000);
+        }
+
+        // リーチエフェクト
+        function triggerRiichiEffect(playerId) {
+            console.log(`🔥 リーチエフェクト開始: プレイヤー${playerId}`);
+            
+            if (playerId === 0) {
+                // 自分のリーチ - 手牌に赤い光エフェクト
+                const handArea = document.getElementById('hand0');
+                if (handArea) {
+                    handArea.classList.add('riichi-glow');
+                    setTimeout(() => {
+                        handArea.classList.remove('riichi-glow');
+                    }, 3000);
+                }
+            }
+            
+            // 背景フラッシュ（赤）
+            flashBackground('#FF5722', 300);
+            
+            // リーチ音効果
+            soundManager.playSound('riichi');
+        }
+
+        // 紙吹雪生成
+        function createConfetti() {
+            const container = document.createElement('div');
+            container.className = 'confetti-container';
+            document.body.appendChild(container);
+            
+            const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57'];
+            
+            for (let i = 0; i < 50; i++) {
+                const confetti = document.createElement('div');
+                confetti.className = 'confetti';
+                confetti.style.left = Math.random() * 100 + '%';
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                confetti.style.animationDelay = Math.random() * 2 + 's';
+                confetti.style.animationDuration = (Math.random() * 2 + 2) + 's';
+                container.appendChild(confetti);
+            }
+            
+            // 3秒後にコンテナを削除
+            setTimeout(() => {
+                document.body.removeChild(container);
+            }, 3000);
+        }
+
+        // 背景フラッシュエフェクト
+        function flashBackground(color, duration) {
+            const flash = document.createElement('div');
+            flash.style.position = 'fixed';
+            flash.style.top = '0';
+            flash.style.left = '0';
+            flash.style.width = '100%';
+            flash.style.height = '100%';
+            flash.style.backgroundColor = color;
+            flash.style.opacity = '0.3';
+            flash.style.pointerEvents = 'none';
+            flash.style.zIndex = '9998';
+            flash.style.transition = `opacity ${duration}ms ease-out`;
+            
+            document.body.appendChild(flash);
+            
+            // フェードアウト
+            setTimeout(() => {
+                flash.style.opacity = '0';
+                setTimeout(() => {
+                    document.body.removeChild(flash);
+                }, duration);
+            }, 50);
+        }
+
+        // 牌の配牌アニメーション
+        function animateTileDistribution() {
+            const handArea = document.getElementById('hand0');
+            const tiles = handArea.querySelectorAll('.tile');
+            
+            tiles.forEach((tile, index) => {
+                tile.style.opacity = '0';
+                tile.style.transform = 'translateY(-50px)';
+                
+                setTimeout(() => {
+                    tile.style.transition = 'all 0.3s ease-out';
+                    tile.style.opacity = '1';
+                    tile.style.transform = 'translateY(0)';
+                }, index * 100);
+            });
+        }
+
+        // 打牌アニメーション
+        function animateDiscard(tileElement) {
+            if (!tileElement) return;
+            
+            tileElement.style.transition = 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+            tileElement.style.transform = 'translateY(-20px) scale(0.9)';
+            tileElement.style.opacity = '0.7';
+            
+            setTimeout(() => {
+                tileElement.style.transform = 'translateY(0) scale(1)';
+                tileElement.style.opacity = '1';
+            }, 400);
         }
 
         // キーボードショートカット
