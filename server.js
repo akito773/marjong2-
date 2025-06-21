@@ -256,7 +256,15 @@ function createGameState(gameId) {
     playerAutoTsumoKiri: false, // プレイヤーのオートツモ切り設定
     lastDiscard: null, // 最後の捨て牌
     lastDiscardPlayer: null, // 最後に捨て牌したプレイヤー
-    phase: 'playing' // ゲーム状態
+    phase: 'playing', // ゲーム状態
+    // 局・半荘管理
+    wind: 'east', // 場風（東場・南場）
+    roundNumber: 1, // 局数（1-4局）
+    honba: 0, // 本場数
+    kyotaku: 0, // 供託（リーチ棒）
+    gameType: 'hanchan', // 'tonpuu'（東風戦）または 'hanchan'（半荘戦）
+    isLastRound: false, // 最終局フラグ
+    roundResults: [] // 各局の結果履歴
   };
 }
 
@@ -388,6 +396,10 @@ io.on('connection', (socket) => {
       case 'ron':
         logWithTime(`🎯 [PLAYER ACTION] ロン和了: ${data.playerId}`);
         handleRon(socket, gameState, data);
+        break;
+      case 'riichi':
+        logWithTime(`🔥 [PLAYER ACTION] リーチ宣言: ${data.playerId}`);
+        handleRiichi(socket, gameState, data);
         break;
       default:
         console.log(`❌ [ERROR] 未知のアクション: ${data.type}`);
@@ -1325,11 +1337,24 @@ function handleTsumo(socket, gameState, data) {
   
   logWithTime(`✅ [TSUMO] プレイヤー${playerId}(${player.name})がツモ和了！ ${score.total}点`);
   
-  // ゲーム終了処理
-  gameState.phase = 'finished';
-  gameState.winner = playerId;
-  gameState.winType = 'tsumo';
-  gameState.cpuAutoMode = false;
+  // 点数移動処理
+  const scoreChanges = calculateScoreChanges(gameState, playerId, score, true);
+  applyScoreChanges(gameState, scoreChanges);
+  
+  // 局結果を記録
+  const roundResult = {
+    roundNumber: gameState.roundNumber,
+    wind: gameState.wind,
+    honba: gameState.honba,
+    winner: playerId,
+    winType: 'tsumo',
+    yaku: winResult.yaku,
+    han: winResult.han,
+    score: score,
+    scoreChanges: scoreChanges,
+    timestamp: new Date()
+  };
+  gameState.roundResults.push(roundResult);
   
   // 全プレイヤーに結果を通知
   const winData = {
@@ -1340,12 +1365,18 @@ function handleTsumo(socket, gameState, data) {
     yaku: winResult.yaku,
     han: winResult.han,
     score: score,
+    scoreChanges: scoreChanges,
+    roundResult: roundResult,
     message: `${player.name}がツモ和了しました！`
   };
   
   games.set(socket.gameId, gameState);
-  io.to(socket.gameId).emit('gameState', gameState);
   io.to(socket.gameId).emit('winResult', winData);
+  
+  // 局終了処理と次局準備
+  setTimeout(() => {
+    processRoundEnd(socket, gameState, roundResult);
+  }, 5000); // 5秒後に次局開始
 }
 
 // ロン和了ハンドラー
@@ -1398,11 +1429,26 @@ function handleRon(socket, gameState, data) {
   
   logWithTime(`✅ [RON] プレイヤー${playerId}(${player.name})がロン和了！ ${score.total}点`);
   
-  // ゲーム終了処理
-  gameState.phase = 'finished';
-  gameState.winner = playerId;
-  gameState.winType = 'ron';
-  gameState.cpuAutoMode = false;
+  // 点数移動処理
+  const scoreChanges = calculateScoreChanges(gameState, playerId, score, false, lastDiscard.playerId);
+  applyScoreChanges(gameState, scoreChanges);
+  
+  // 局結果を記録
+  const roundResult = {
+    roundNumber: gameState.roundNumber,
+    wind: gameState.wind,
+    honba: gameState.honba,
+    winner: playerId,
+    winType: 'ron',
+    yaku: winResult.yaku,
+    han: winResult.han,
+    score: score,
+    scoreChanges: scoreChanges,
+    discardPlayer: lastDiscard.playerId,
+    discardTile: lastDiscard.tile,
+    timestamp: new Date()
+  };
+  gameState.roundResults.push(roundResult);
   
   // 全プレイヤーに結果を通知
   const winData = {
@@ -1413,14 +1459,80 @@ function handleRon(socket, gameState, data) {
     yaku: winResult.yaku,
     han: winResult.han,
     score: score,
+    scoreChanges: scoreChanges,
+    roundResult: roundResult,
     discardPlayer: lastDiscard.playerId,
     discardTile: lastDiscard.tile,
     message: `${player.name}がロン和了しました！`
   };
   
   games.set(socket.gameId, gameState);
-  io.to(socket.gameId).emit('gameState', gameState);
   io.to(socket.gameId).emit('winResult', winData);
+  
+  // 局終了処理と次局準備
+  setTimeout(() => {
+    processRoundEnd(socket, gameState, roundResult);
+  }, 5000); // 5秒後に次局開始
+}
+
+// リーチハンドラー
+function handleRiichi(socket, gameState, data) {
+  logWithTime(`🔥 [RIICHI] リーチ処理開始`);
+  const playerId = parseInt(data.playerId.replace('player_', ''));
+  const player = gameState.players[playerId];
+  
+  if (!player) {
+    logWithTime(`❌ [RIICHI ERROR] プレイヤーが見つかりません: ${playerId}`);
+    socket.emit('actionResult', { success: false, error: 'プレイヤーが見つかりません' });
+    return;
+  }
+  
+  // リーチ条件チェック
+  if (gameState.currentPlayer !== playerId) {
+    logWithTime(`❌ [RIICHI ERROR] プレイヤー${playerId}のターンではありません`);
+    socket.emit('actionResult', { success: false, error: 'あなたのターンではありません' });
+    return;
+  }
+  
+  if (player.hand.riichi) {
+    logWithTime(`❌ [RIICHI ERROR] プレイヤー${playerId}は既にリーチしています`);
+    socket.emit('actionResult', { success: false, error: '既にリーチしています' });
+    return;
+  }
+  
+  if (player.score < 1000) {
+    logWithTime(`❌ [RIICHI ERROR] プレイヤー${playerId}の点数が不足: ${player.score}点`);
+    socket.emit('actionResult', { success: false, error: '点数が不足しています（1000点必要）' });
+    return;
+  }
+  
+  if (player.hand.tiles.length !== 14) {
+    logWithTime(`❌ [RIICHI ERROR] プレイヤー${playerId}の手牌数が不正: ${player.hand.tiles.length}枚`);
+    socket.emit('actionResult', { success: false, error: '手牌数が不正です' });
+    return;
+  }
+  
+  // リーチ成立
+  player.hand.riichi = true;
+  player.score -= 1000; // リーチ棒支払い
+  gameState.kyotaku++; // 供託に追加
+  
+  logWithTime(`✅ [RIICHI] プレイヤー${playerId}(${player.name})がリーチ宣言！ 供託: ${gameState.kyotaku}本`);
+  
+  // 全プレイヤーに通知
+  const riichiData = {
+    success: true,
+    playerId: playerId,
+    playerName: player.name,
+    kyotaku: gameState.kyotaku,
+    playerScore: player.score,
+    message: `${player.name}がリーチ！`
+  };
+  
+  games.set(socket.gameId, gameState);
+  io.to(socket.gameId).emit('gameState', gameState);
+  io.to(socket.gameId).emit('riichiDeclared', riichiData);
+  socket.emit('actionResult', riichiData);
 }
 
 // メルド可能性チェック関数
@@ -1988,6 +2100,231 @@ function isDiscardedTileDora(tile, gameState) {
   }
   
   return tile.suit === actualDora.suit && tile.rank === actualDora.rank;
+}
+
+// =====================================
+// 局・半荘管理システム
+// =====================================
+
+// 点数移動計算
+function calculateScoreChanges(gameState, winnerId, score, isTsumo, discardPlayerId = null) {
+  const changes = {};
+  const isParent = gameState.players[winnerId].wind === 'east';
+  
+  // 全プレイヤーの変動を初期化
+  for (let i = 0; i < 4; i++) {
+    changes[i] = 0;
+  }
+  
+  if (isTsumo) {
+    // ツモの場合：全員から支払い
+    const payments = score.payments;
+    changes[winnerId] = payments.winner; // 和了者が受け取る
+    
+    for (let i = 0; i < 4; i++) {
+      if (i !== winnerId) {
+        changes[i] = -payments.others; // 他者が支払い
+      }
+    }
+  } else {
+    // ロンの場合：放銃者のみが支払い
+    changes[winnerId] = score.total;
+    changes[discardPlayerId] = -score.total;
+  }
+  
+  // 本場代・供託を加算
+  if (gameState.honba > 0) {
+    const honbaBonus = gameState.honba * 300;
+    changes[winnerId] += honbaBonus;
+    
+    if (isTsumo) {
+      // ツモの場合：全員から100点ずつ
+      for (let i = 0; i < 4; i++) {
+        if (i !== winnerId) {
+          changes[i] -= 100 * gameState.honba;
+        }
+      }
+    } else {
+      // ロンの場合：放銃者のみ
+      changes[discardPlayerId] -= honbaBonus;
+    }
+  }
+  
+  // 供託（リーチ棒）を加算
+  if (gameState.kyotaku > 0) {
+    changes[winnerId] += gameState.kyotaku * 1000;
+  }
+  
+  return changes;
+}
+
+// 点数変動を適用
+function applyScoreChanges(gameState, scoreChanges) {
+  for (let i = 0; i < 4; i++) {
+    gameState.players[i].score += scoreChanges[i];
+    logWithTime(`💰 [SCORE] ${gameState.players[i].name}: ${scoreChanges[i] >= 0 ? '+' : ''}${scoreChanges[i]}点 (合計: ${gameState.players[i].score}点)`);
+  }
+}
+
+// 局終了処理
+function processRoundEnd(socket, gameState, roundResult) {
+  logWithTime(`🏁 [ROUND END] ${gameState.wind}${gameState.roundNumber}局 ${gameState.honba}本場終了`);
+  
+  // 連荘判定（親が和了した場合）
+  const isRenchan = roundResult.winner === gameState.dealer;
+  
+  if (isRenchan) {
+    logWithTime(`🔄 [RENCHAN] 親の和了により連荘`);
+    gameState.honba++; // 本場数を増やす
+  } else {
+    // 親流れ
+    logWithTime(`👑 [DEALER CHANGE] 親流れ`);
+    gameState.dealer = (gameState.dealer + 1) % 4;
+    gameState.roundNumber++;
+    gameState.honba = 0;
+    
+    // 風牌の更新
+    updatePlayerWinds(gameState);
+  }
+  
+  // リーチ棒をクリア（和了者が獲得済み）
+  gameState.kyotaku = 0;
+  
+  // ゲーム終了判定
+  if (checkGameEnd(gameState)) {
+    logWithTime(`🎊 [GAME END] ゲーム終了`);
+    finishGame(socket, gameState);
+  } else {
+    // 次局開始
+    logWithTime(`🆕 [NEW ROUND] 次局開始: ${gameState.wind}${gameState.roundNumber}局`);
+    startNewRound(socket, gameState);
+  }
+}
+
+// 風牌の更新
+function updatePlayerWinds(gameState) {
+  const winds = ['east', 'south', 'west', 'north'];
+  for (let i = 0; i < 4; i++) {
+    const windIndex = (i - gameState.dealer + 4) % 4;
+    gameState.players[i].wind = winds[windIndex];
+  }
+}
+
+// ゲーム終了判定
+function checkGameEnd(gameState) {
+  // 半荘の場合：南4局終了で終了
+  if (gameState.gameType === 'hanchan') {
+    if (gameState.wind === 'south' && gameState.roundNumber > 4) {
+      return true;
+    }
+    // 東場の場合、南場に移行
+    if (gameState.wind === 'east' && gameState.roundNumber > 4) {
+      gameState.wind = 'south';
+      gameState.roundNumber = 1;
+      gameState.dealer = 0; // 起家に戻る
+      updatePlayerWinds(gameState);
+      return false;
+    }
+  }
+  
+  // 東風戦の場合：東4局終了で終了
+  if (gameState.gameType === 'tonpuu' && gameState.roundNumber > 4) {
+    return true;
+  }
+  
+  // 誰かが0点以下になった場合
+  const hasNegativeScore = gameState.players.some(player => player.score < 0);
+  if (hasNegativeScore) {
+    logWithTime(`⚠️ [GAME END] 誰かが0点以下になったため終了`);
+    return true;
+  }
+  
+  return false;
+}
+
+// 新しい局の開始
+function startNewRound(socket, gameState) {
+  // 牌山を再生成
+  const tiles = createTiles();
+  
+  // シャッフル
+  for (let i = tiles.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+  }
+  
+  // プレイヤーの手牌をリセット
+  for (let i = 0; i < 4; i++) {
+    const player = gameState.players[i];
+    
+    // 手牌をクリア
+    player.hand.tiles = [];
+    player.hand.discards = [];
+    player.hand.melds = [];
+    player.hand.riichi = false;
+    
+    // 配牌
+    const tileCount = i === gameState.dealer ? 14 : 13;
+    player.hand.tiles = sortHand(tiles.splice(0, tileCount));
+    
+    logWithTime(`🀄 [NEW ROUND] ${player.name}に${tileCount}枚配牌`);
+  }
+  
+  // ゲーム状態更新
+  gameState.wallTiles = tiles;
+  gameState.remainingTiles = tiles.length;
+  gameState.dora = tiles[0] || null;
+  gameState.currentPlayer = gameState.dealer;
+  gameState.phase = 'playing';
+  gameState.lastDiscard = null;
+  gameState.lastDiscardPlayer = null;
+  
+  logWithTime(`🎲 [NEW ROUND] 新ドラ表示牌: ${tiles[0]?.displayName || 'なし'}`);
+  
+  // 全プレイヤーに新局状態を送信
+  games.set(socket.gameId, gameState);
+  io.to(socket.gameId).emit('gameState', gameState);
+  io.to(socket.gameId).emit('newRound', {
+    wind: gameState.wind,
+    roundNumber: gameState.roundNumber,
+    dealer: gameState.dealer,
+    honba: gameState.honba
+  });
+  
+  // CPU自動モードを再開
+  gameState.cpuAutoMode = true;
+  startCpuAutoGame(gameState, socket.gameId);
+}
+
+// ゲーム終了処理
+function finishGame(socket, gameState) {
+  gameState.phase = 'finished';
+  
+  // 最終順位計算
+  const finalRanking = [...gameState.players]
+    .sort((a, b) => b.score - a.score)
+    .map((player, index) => ({
+      rank: index + 1,
+      playerId: player.id,
+      name: player.name,
+      score: player.score
+    }));
+  
+  logWithTime(`🏆 [FINAL RANKING] 最終結果:`);
+  finalRanking.forEach(result => {
+    logWithTime(`${result.rank}位: ${result.name} (${result.score}点)`);
+  });
+  
+  const gameEndData = {
+    finalRanking: finalRanking,
+    roundResults: gameState.roundResults,
+    gameType: gameState.gameType,
+    totalRounds: gameState.roundResults.length
+  };
+  
+  games.set(socket.gameId, gameState);
+  io.to(socket.gameId).emit('gameState', gameState);
+  io.to(socket.gameId).emit('gameEnd', gameEndData);
 }
 
 server.listen(PORT, () => {
