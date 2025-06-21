@@ -1,7 +1,7 @@
 module.exports = {
   apps: [{
     name: 'marjong2-test',
-    script: 'dist/src/server.js',
+    script: 'server.js',
     instances: 1,
     exec_mode: 'fork',
     env: {
