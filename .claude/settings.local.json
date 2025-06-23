@@ -24,7 +24,23 @@
       "Bash(pkill:*)",
       "Bash(true)",
       "Bash(cp:*)",
-      "WebFetch(domain:mahjong.wikidot.com)"
+      "WebFetch(domain:mahjong.wikidot.com)",
+      "Bash(pm2 restart:*)",
+      "Bash(find:*)",
+      "Bash(timeout:*)",
+      "Bash(curl:*)",
+      "Bash(ls:*)",
+      "Bash(pm2 logs:*)",
+      "Bash(npx pm2 logs:*)",
+      "Bash(ss:*)",
+      "Bash(PORT=3001 npm start)",
+      "Bash(touch:*)",
+      "Bash(rm:*)",
+      "Bash(cat:*)",
+      "Bash(kill:*)",
+      "Bash(npm restart)",
+      "Bash(git restore:*)",
+      "Bash(PORT=3001 node server.js)"
     ],
     "deny": []
   }

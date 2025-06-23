@@ -7,6 +7,24 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&display=swap" rel="stylesheet">
     <script src="/socket.io/socket.io.js"></script>
     <style>
+        @keyframes tenpai-pulse {
+            0% { 
+                opacity: 1; 
+                transform: scale(1); 
+                box-shadow: 0 4px 8px rgba(0,0,0,0.4), 0 0 0 0 rgba(255, 107, 107, 0.7);
+            }
+            50% { 
+                opacity: 0.9; 
+                transform: scale(1.05); 
+                box-shadow: 0 6px 12px rgba(0,0,0,0.5), 0 0 0 4px rgba(255, 107, 107, 0.3);
+            }
+            100% { 
+                opacity: 1; 
+                transform: scale(1); 
+                box-shadow: 0 4px 8px rgba(0,0,0,0.4), 0 0 0 0 rgba(255, 107, 107, 0.7);
+            }
+        }
+        
         * {
             margin: 0;
             padding: 0;
@@ -268,12 +286,13 @@
             margin: 0 auto;
         }
 
-        /* レスポンシブ左右の河（縦向き3×6） */
+        /* レスポンシブ左右の河（横向き6×3） */
         .river-left, .river-right {
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(6, 1fr);
-            width: 100px;
-            height: 240px;
+            grid-template-columns: repeat(6, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            width: 240px;
+            height: 120px;
+            transform: rotate(90deg);
         }
         
         /* 2K対応: 河エリア */
@@ -284,8 +303,8 @@
             }
             
             .river-left, .river-right {
-                width: 120px;
-                height: 300px;
+                width: 300px;
+                height: 150px;
             }
         }
 
@@ -328,8 +347,8 @@
         /* 2K対応各プレイヤーの河牌方向 */
         .river-left .river-tile, 
         .river-right .river-tile {
-            /* 南・北は横向き */
-            transform: rotate(0deg);
+            /* 河エリアが90度回転されているので、牌は-90度回転で正常に */
+            transform: rotate(-90deg);
             width: 50px;
             height: 40px;
             font-size: 14px;
@@ -337,7 +356,7 @@
 
         .river-left .river-tile.reach, 
         .river-right .river-tile.reach {
-            transform: rotate(90deg); /* リーチ牌は縦倒し */
+            transform: rotate(0deg); /* リーチ牌は河エリアの回転で相殺 */
         }
 
         .river-top .river-tile {
@@ -567,17 +586,22 @@
         }
 
         .meld-tile {
-            width: 48px;
-            height: 64px;
+            width: 50px;
+            height: 65px;
             background: linear-gradient(135deg, #f8f9fa, #e9ecef);
             border: 2px solid #666;
             border-radius: 6px;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             font-size: 1.1rem;
             font-weight: bold;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            font-family: 'Noto Sans JP', serif;
+            line-height: 0.9;
+            white-space: pre-line;
+            text-align: center;
         }
 
         .meld-tile.red {
@@ -683,19 +707,24 @@
             border: 2px solid #dee2e6;
             border-radius: 8px;
             padding: 8px 6px;
-            font-size: 18px;
-            font-weight: 600;
+            font-size: 20px;
+            font-weight: 700;
             cursor: pointer;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            width: 40px;
-            height: 50px;
+            width: 50px;
+            height: 65px;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
             user-select: none;
             position: relative;
             overflow: hidden;
+            font-family: 'Noto Sans JP', serif;
+            line-height: 0.9;
+            white-space: pre-line;
+            text-align: center;
         }
 
         .tile::before {
@@ -734,8 +763,32 @@
         }
 
         .tile.red {
-            color: #dc3545;
+            color: #d32f2f;
             font-weight: 800;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        
+        /* 牌の色分け */
+        .tile.man {
+            color: #d32f2f; /* 萬子は赤 */
+            font-weight: 700;
+        }
+        
+        .tile.pin {
+            color: #333333; /* 筒子は黒 */
+            font-weight: 700;
+        }
+        
+        .tile.sou {
+            color: #2e7d32; /* 索子は緑 */
+            font-weight: 700;
+        }
+        
+        /* ツモ牌のスタイル */
+        .tile.tsumo {
+            margin-left: 8px; /* 他の牌との間隔 */
+            box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+            border-color: #2196f3;
         }
 
         /* プレイヤーの捨て牌 */
@@ -757,12 +810,17 @@
         }
 
         .player-discard-tiles .tile {
-            width: 28px;
-            height: 36px;
+            width: 35px;
+            height: 45px;
             font-size: 14px;
+            font-weight: 600;
             cursor: default;
             background: #e9ecef;
             border-color: #ced4da;
+            flex-direction: column;
+            line-height: 0.8;
+            white-space: pre-line;
+            text-align: center;
         }
 
         .player-discard-tiles .tile:hover {
@@ -1094,10 +1152,13 @@
                 <div id="gameInfo">東場 1局</div>
                 <div>残り牌: <span id="remainingTiles">69</span></div>
                 <div>現在: <span id="currentPlayerName">あなた</span></div>
+                <div id="doraInfo">ドラ: <span id="doraDisplay">?</span></div>
             </div>
 
             <div class="game-controls">
                 <button class="btn btn-info" onclick="toggleDebug()">デバッグ</button>
+                <button class="btn btn-secondary" onclick="checkUISync()" style="font-size: 0.8rem;">UI同期</button>
+                <button class="btn btn-warning" onclick="forceClearMelds()" style="font-size: 0.8rem;">晒しクリア</button>
                 <button id="cpuAutoBtn" class="btn btn-success" onclick="toggleCpuAuto()">CPU自動開始</button>
                 <button id="playerAutoBtn" class="btn btn-secondary" onclick="togglePlayerAuto()">オートツモ切り</button>
                 <button class="btn btn-warning" onclick="newGame()">新しいゲーム</button>
@@ -1244,6 +1305,7 @@
             <button class="btn btn-warning" onclick="callChi()" id="chiBtn" style="display: inline-block;">チー</button>
             <button class="btn btn-warning" onclick="callPon()" id="ponBtn" style="display: inline-block;">ポン</button>
             <button class="btn btn-warning" onclick="callKan()" id="kanBtn" style="display: inline-block;">カン</button>
+            <button class="btn" style="background: linear-gradient(45deg, #ff6b6b, #ee5a24); color: white;" onclick="callMeld()" id="meldBtn" style="display: none;">スマートメルド</button>
             <button class="btn btn-success" onclick="callTsumo()" id="tsumoBtn">ツモ</button>
             <button class="btn btn-success" onclick="callRon()" id="ronBtn">ロン</button>
             <button class="btn btn-info" onclick="executeAI()" id="aiBtn">AI実行</button>
@@ -1260,6 +1322,7 @@
                 <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="showDiscards()">捨て牌確認</button>
                 <button class="btn" style="background: #17a2b8; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="testDiscardCoordinates()">座標テスト</button>
                 <button class="btn" style="background: #28a745; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="testYakuAnalysis()">役判定テスト</button>
+                <button class="btn" style="background: #17a2b8; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="testScoreCalculation()">点数計算テスト</button>
                 <button class="btn" style="background: #dc3545; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="showErrorLogs()">エラーログ</button>
                 <button class="btn" style="background: #6c757d; color: white; padding: 4px 8px; font-size: 0.7rem;" onclick="clearConsole()">コンソール消去</button>
             </div>
@@ -1286,6 +1349,16 @@
         let lastDiscardedTile = null;
         let lastDiscardedPlayer = null;
         
+        // 風設定（強化版麻雀ロジック用）
+        let gameSettings = {
+            gameWind: 'east',   // 場風
+            playerWind: 'east', // 自風
+            round: 1            // 局数
+        };
+        
+        // 副露データ（強化版ロジック用）
+        let melds = [];
+        
         // 変数初期化
         let isConnected = false;
         let currentTenpaiStatus = { isTenpai: false, waitingTiles: [] };
@@ -1306,6 +1379,23 @@
         
         socket.on('gameUpdate', (newGameState) => {
             console.log('🔄 リアルタイムゲーム状態更新受信');
+            
+            // ツモタイミング追跡
+            if (gameState && newGameState && gameState.players && newGameState.players) {
+                const oldHandSize = gameState.players[0]?.hand?.tiles?.length || 0;
+                const newHandSize = newGameState.players[0]?.hand?.tiles?.length || 0;
+                const oldCurrentPlayer = gameState.currentPlayer;
+                const newCurrentPlayer = newGameState.currentPlayer;
+                
+                console.log('🔍 Hand size change:', oldHandSize, '→', newHandSize);
+                console.log('🔍 Current player change:', oldCurrentPlayer, '→', newCurrentPlayer);
+                
+                if (newHandSize > oldHandSize && newCurrentPlayer === 0) {
+                    console.log('🎯 TSUMO DETECTED: Player drew a tile');
+                    console.log('🔍 New tiles:', newGameState.players[0].hand.tiles.map((t, i) => `${i}: ${t.suit}${t.rank} (id:${t.id})`));
+                }
+            }
+            
             gameState = newGameState;
             updateGameDisplay();
         });
@@ -1320,8 +1410,23 @@
         
         socket.on('gameState', (newGameState) => {
             // console.log('🎮 ゲーム状態受信:', newGameState);
+            
+            // ツモタイミング追跡（gameStateイベント）
+            if (gameState && newGameState && gameState.players && newGameState.players) {
+                const oldHandSize = gameState.players[0]?.hand?.tiles?.length || 0;
+                const newHandSize = newGameState.players[0]?.hand?.tiles?.length || 0;
+                
+                if (newHandSize > oldHandSize) {
+                    console.log('🎯 TSUMO DETECTED (gameState): Player drew a tile');
+                    console.log('🔍 New tiles (gameState):', newGameState.players[0].hand.tiles.map((t, i) => `${i}: ${t.suit}${t.rank} (id:${t.id})`));
+                }
+            }
+            
             gameState = newGameState;
             updateGameDisplay();
+            
+            // テンパイ表示を更新
+            updateTenpaiDisplay(newGameState);
             
             // 初回のみゲーム開始通知を表示
             if (!gameStartNotified && newGameState.phase === 'playing') {
@@ -1375,45 +1480,208 @@
             console.log('🎯 和了結果受信:', data);
             
             if (data.success) {
+                // 詳細な和了表示を作成
+                displayWinResult(data);
+                
                 // 勝利エフェクトを実行
                 triggerWinCelebration(data);
                 
+                // 基本メッセージ
                 showNotification(`${data.message}`, 'success');
-                
-                if (data.yaku && data.yaku.length > 0) {
-                    const yakuNames = data.yaku.map(y => y.name).join('・');
-                    showNotification(`役: ${yakuNames} (${data.han}翻)`, 'info');
-                }
-                
-                if (data.score) {
-                    const score = data.score;
-                    let scoreText = '';
-                    
-                    if (score.isYakuman) {
-                        scoreText = `役満${score.yakumanCount > 1 ? score.yakumanCount + '倍' : ''}: ${score.total}点`;
-                        triggerYakumanCelebration(); // 役満特別エフェクト
-                    } else {
-                        scoreText = `${score.han}翻${score.fu}符: ${score.total}点`;
-                    }
-                    
-                    showNotification(scoreText, 'success');
-                    
-                    // 詳細な支払い情報
-                    if (score.isTsumo) {
-                        showNotification(`ツモ: 全員から${score.payments.winner}点`, 'info');
-                    } else {
-                        showNotification(`ロン: ${score.payments.winner}点`, 'info');
-                    }
-                }
                 
                 // ゲーム終了状態の表示
                 setTimeout(() => {
                     showNotification('次局準備中...', 'info');
-                }, 3000);
+                }, 5000);
             } else {
                 showNotification(`和了失敗: ${data.error}`, 'error');
             }
         });
+        
+        // 詳細な和了結果表示
+        function displayWinResult(data) {
+            // 既存の和了表示があれば削除
+            const existingDisplay = document.querySelector('.win-result-modal');
+            if (existingDisplay) {
+                existingDisplay.remove();
+            }
+            
+            const modal = document.createElement('div');
+            modal.className = 'win-result-modal';
+            modal.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, rgba(0, 0, 0, 0.95) 0%, rgba(20, 20, 20, 0.95) 100%);
+                border: 3px solid #ffc107;
+                border-radius: 15px;
+                padding: 30px;
+                z-index: 10001;
+                color: white;
+                font-family: 'Noto Sans JP', sans-serif;
+                max-width: 600px;
+                width: 90%;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+                backdrop-filter: blur(10px);
+            `;
+            
+            let content = `
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <h2 style="color: #ffc107; margin: 0 0 10px 0; font-size: 2rem;">
+                        ${data.winType === 'tsumo' ? '🎊 ツモ！' : '🎯 ロン！'}
+                    </h2>
+                    <div style="font-size: 1.2rem; color: #fff;">
+                        ${data.winnerName || 'プレイヤー'} の勝利！
+                    </div>
+                </div>
+            `;
+            
+            // 役表示
+            if (data.yaku && data.yaku.length > 0) {
+                content += `
+                    <div style="margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px;">
+                        <h3 style="color: #4CAF50; margin: 0 0 10px 0;">🎴 役</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                `;
+                
+                data.yaku.forEach(yaku => {
+                    const hanText = yaku.han >= 13 ? '役満' : `${yaku.han}翻`;
+                    content += `
+                        <span style="
+                            background: linear-gradient(45deg, #2196F3, #1976D2);
+                            padding: 6px 12px;
+                            border-radius: 20px;
+                            font-size: 0.9rem;
+                            white-space: nowrap;
+                        ">
+                            ${yaku.name} (${hanText})
+                        </span>
+                    `;
+                });
+                
+                content += `
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // 点数表示
+            if (data.score) {
+                const score = data.score;
+                content += `
+                    <div style="margin-bottom: 20px; padding: 15px; background: rgba(255,193,7,0.2); border-radius: 8px;">
+                        <h3 style="color: #ffc107; margin: 0 0 10px 0;">💰 得点</h3>
+                `;
+                
+                if (score.isYakuman) {
+                    content += `
+                        <div style="font-size: 1.5rem; font-weight: bold; color: #ff4444;">
+                            役満${score.yakumanCount > 1 ? score.yakumanCount + '倍' : ''}
+                        </div>
+                        <div style="font-size: 1.3rem; margin-top: 5px;">
+                            ${score.total.toLocaleString()}点
+                        </div>
+                    `;
+                } else {
+                    content += `
+                        <div style="font-size: 1.2rem;">
+                            ${score.han}翻 ${score.fu}符
+                        </div>
+                        <div style="font-size: 1.4rem; font-weight: bold; margin-top: 5px;">
+                            ${score.total.toLocaleString()}点
+                        </div>
+                    `;
+                }
+                
+                // 支払い詳細
+                if (score.payments) {
+                    content += `
+                        <div style="margin-top: 15px; font-size: 0.95rem; opacity: 0.9;">
+                    `;
+                    
+                    if (score.isTsumo) {
+                        content += `
+                            <div>ツモ: 各プレイヤーから ${score.payments.each?.toLocaleString() || '---'}点</div>
+                        `;
+                    } else {
+                        content += `
+                            <div>ロン: ${score.payments.winner?.toLocaleString() || '---'}点</div>
+                        `;
+                    }
+                    
+                    content += `</div>`;
+                }
+                
+                content += `</div>`;
+            }
+            
+            // 和了者の手牌表示
+            if (data.winnerHand) {
+                content += `
+                    <div style="margin-bottom: 20px; padding: 15px; background: rgba(76,175,80,0.2); border-radius: 8px;">
+                        <h3 style="color: #4CAF50; margin: 0 0 10px 0;">🀄 ${data.winnerName}の手牌</h3>
+                `;
+                
+                // メルド（鳴き）表示
+                if (data.winnerHand.melds && data.winnerHand.melds.length > 0) {
+                    content += `<div style="margin-bottom: 10px;">`;
+                    content += `<strong>鳴き:</strong> `;
+                    data.winnerHand.melds.forEach(meld => {
+                        const meldTiles = meld.tiles.map(tile => tile.unicode || getTileDisplayName(tile) || '🀫').join('');
+                        content += `[${meldTiles}] `;
+                    });
+                    content += `</div>`;
+                }
+                
+                // 手牌表示
+                content += `
+                    <div>
+                        <strong>手牌:</strong>
+                        <div style="font-family: monospace; font-size: 1.1rem; margin-top: 5px;">
+                            ${data.winnerHand.tiles.map(tile => tile.unicode || getTileDisplayName(tile) || '🀫').join(' ')}
+                `;
+                
+                // ロンの場合は和了牌を表示
+                if (data.winType === 'ron' && data.winnerHand.winningTile) {
+                    content += ` + ${data.winnerHand.winningTile.unicode || getTileDisplayName(data.winnerHand.winningTile) || '🀫'}`;
+                }
+                
+                content += `
+                        </div>
+                    </div>
+                    </div>
+                `;
+            }
+            
+            // 閉じるボタン
+            content += `
+                <div style="text-align: center; margin-top: 20px;">
+                    <button onclick="this.parentElement.parentElement.remove()" style="
+                        background: linear-gradient(45deg, #4CAF50, #45a049);
+                        color: white;
+                        border: none;
+                        padding: 12px 30px;
+                        border-radius: 25px;
+                        font-size: 1rem;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                    " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        OK
+                    </button>
+                </div>
+            `;
+            
+            modal.innerHTML = content;
+            document.body.appendChild(modal);
+            
+            // 10秒後に自動削除
+            setTimeout(() => {
+                if (document.body.contains(modal)) {
+                    modal.remove();
+                }
+            }, 10000);
+        }
 
         // リーチ宣言受信
         socket.on('riichiDeclared', (data) => {
@@ -1448,7 +1716,30 @@
         socket.on('gameEnd', (data) => {
             console.log('🎊 ゲーム終了:', data);
             
-            // 最終順位表示
+            // 三家和の場合の特別処理
+            if (data.type === 'triple_ron') {
+                let tripleRonText = '🔥 三家和（さんちゃほー）\n\n';
+                tripleRonText += 'ロン和了者:\n';
+                data.ronPlayers.forEach(player => {
+                    tripleRonText += `・${player.name} (${player.score}点)\n`;
+                });
+                tripleRonText += `\n振り込み: ${data.discardPlayer.name} (${data.discardPlayer.score}点)`;
+                
+                if (data.kyotaku > 0) {
+                    tripleRonText += `\n供託${data.kyotaku}本は次局に持ち越し`;
+                }
+                
+                showNotification(tripleRonText, 'warning');
+                
+                // 三家和エフェクト
+                setTimeout(() => {
+                    flashBackground('#FF5722', 2000);
+                    createFireworks();
+                }, 1000);
+                return;
+            }
+            
+            // 通常の最終順位表示
             let rankingText = '🏆 最終結果 🏆\n';
             data.finalRanking.forEach(player => {
                 rankingText += `${player.rank}位: ${player.name} (${player.score}点)\n`;
@@ -1463,6 +1754,214 @@
             }, 1000);
         });
 
+        // 流し満貫結果受信
+        socket.on('nagashiMangan', (data) => {
+            console.log('🌊 流し満貫:', data);
+            
+            let nagashiText = '🌊 流し満貫\n\n';
+            nagashiText += '成立者:\n';
+            data.nagashiPlayers.forEach(player => {
+                nagashiText += `・${player.name} (${player.score}点)\n`;
+                nagashiText += `  捨て牌: ${player.discards.join(' ')}\n`;
+            });
+            
+            showNotification(nagashiText, 'success');
+            
+            // 流し満貫エフェクト
+            setTimeout(() => {
+                flashBackground('#4CAF50', 2000);
+                createWaveEffect();
+            }, 1000);
+        });
+
+        // 流局結果受信
+        socket.on('drawResult', (data) => {
+            console.log('🔄 流局結果:', data);
+            
+            // 詳細な流局結果表示
+            displayDrawResult(data);
+            
+            // 流局エフェクト
+            setTimeout(() => {
+                flashBackground('#FF9800', 1500);
+            }, 1000);
+        });
+        
+        // 流局結果表示関数
+        function displayDrawResult(data) {
+            // 既存の表示があれば削除
+            const existingDisplay = document.querySelector('.draw-result-modal');
+            if (existingDisplay) {
+                existingDisplay.remove();
+            }
+            
+            const modal = document.createElement('div');
+            modal.className = 'draw-result-modal';
+            modal.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: linear-gradient(135deg, rgba(40, 40, 40, 0.95) 0%, rgba(60, 60, 60, 0.95) 100%);
+                border: 3px solid #FF9800;
+                border-radius: 15px;
+                padding: 30px;
+                z-index: 10001;
+                color: white;
+                font-family: 'Noto Sans JP', sans-serif;
+                max-width: 700px;
+                width: 90%;
+                max-height: 80vh;
+                overflow-y: auto;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+                backdrop-filter: blur(10px);
+            `;
+            
+            let content = `
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <h2 style="color: #FF9800; margin: 0 0 10px 0; font-size: 2rem;">
+                        🔄 流局
+                    </h2>
+                </div>
+            `;
+            
+            // テンパイ者の手牌公開
+            const tenpaiPlayers = data.tenpaiResults.filter(result => result.isTenpai);
+            if (tenpaiPlayers.length > 0) {
+                content += `
+                    <div style="margin-bottom: 20px; padding: 15px; background: rgba(76,175,80,0.2); border-radius: 8px;">
+                        <h3 style="color: #4CAF50; margin: 0 0 15px 0;">🀄 テンパイ者の手牌</h3>
+                `;
+                
+                tenpaiPlayers.forEach(player => {
+                    if (player.revealedHand) {
+                        content += `
+                            <div style="margin-bottom: 15px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px;">
+                                <strong>${player.name}:</strong>
+                        `;
+                        
+                        // メルド表示
+                        if (player.revealedHand.melds && player.revealedHand.melds.length > 0) {
+                            content += `<div style="margin: 5px 0;">鳴き: `;
+                            player.revealedHand.melds.forEach(meld => {
+                                const meldTiles = meld.tiles.map(tile => tile.unicode || getTileDisplayName(tile) || '🀫').join('');
+                                content += `[${meldTiles}] `;
+                            });
+                            content += `</div>`;
+                        }
+                        
+                        // 手牌表示
+                        content += `
+                            <div style="font-family: monospace; font-size: 1rem; margin: 5px 0;">
+                                手牌: ${player.revealedHand.tiles.map(tile => tile.unicode || getTileDisplayName(tile) || '🀫').join(' ')}
+                            </div>
+                        `;
+                        
+                        // 待ち牌表示
+                        if (player.revealedHand.waitingTiles && player.revealedHand.waitingTiles.length > 0) {
+                            content += `
+                                <div style="color: #ffc107; font-size: 0.9rem;">
+                                    待ち: ${player.revealedHand.waitingTiles.map(tile => tile.unicode || getTileDisplayName(tile) || '🀫').join(' ')}
+                                </div>
+                            `;
+                        }
+                        
+                        content += `</div>`;
+                    }
+                });
+                
+                content += `</div>`;
+            }
+            
+            // テンパイ・ノーテン結果
+            content += `
+                <div style="margin-bottom: 20px; padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px;">
+                    <h3 style="color: #ffc107; margin: 0 0 10px 0;">📊 結果</h3>
+            `;
+            
+            data.tenpaiResults.forEach(result => {
+                const status = result.isTenpai ? 'テンパイ' : 'ノーテン';
+                const statusColor = result.isTenpai ? '#4CAF50' : '#f44336';
+                content += `
+                    <div style="margin: 5px 0;">
+                        ${result.name}: <span style="color: ${statusColor}; font-weight: bold;">${status}</span>
+                    </div>
+                `;
+            });
+            
+            // 点数移動
+            if (data.pointMovement.some(m => m.points !== 0)) {
+                content += `<div style="margin-top: 15px; font-size: 0.95rem;">`;
+                content += `<strong>点数移動:</strong><br>`;
+                data.pointMovement.forEach(movement => {
+                    if (movement.points !== 0) {
+                        const sign = movement.points > 0 ? '+' : '';
+                        const color = movement.points > 0 ? '#4CAF50' : '#f44336';
+                        content += `
+                            <div style="margin: 3px 0;">
+                                ${data.tenpaiResults[movement.playerId].name}: 
+                                <span style="color: ${color}; font-weight: bold;">${sign}${movement.points}点</span>
+                            </div>
+                        `;
+                    }
+                });
+                content += `</div>`;
+            } else {
+                content += `<div style="margin-top: 10px; opacity: 0.8;">点数移動なし</div>`;
+            }
+            
+            content += `</div>`;
+            
+            // 閉じるボタン
+            content += `
+                <div style="text-align: center; margin-top: 20px;">
+                    <button onclick="this.parentElement.parentElement.remove()" style="
+                        background: linear-gradient(45deg, #FF9800, #f57c00);
+                        color: white;
+                        border: none;
+                        padding: 12px 30px;
+                        border-radius: 25px;
+                        font-size: 1rem;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                    " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        OK
+                    </button>
+                </div>
+            `;
+            
+            modal.innerHTML = content;
+            document.body.appendChild(modal);
+        }
+
+        // 特殊流局結果受信
+        socket.on('specialDrawResult', (data) => {
+            console.log('🔄 特殊流局結果:', data);
+            
+            let drawText = `🔄 ${data.drawName}\n\n`;
+            
+            switch (data.drawType) {
+                case 'four_winds':
+                    drawText += '同じ風牌が4人連続で捨てられました。\n';
+                    break;
+                case 'nine_terminals':
+                    drawText += '親の第一ツモで字牌・ターミナル牌が9種類以上です。\n';
+                    break;
+                case 'four_kans':
+                    drawText += '4回のカンが発生しました。\n';
+                    break;
+            }
+            
+            drawText += '連荘となります。';
+            
+            showNotification(drawText, 'warning');
+            
+            // 特殊流局エフェクト
+            setTimeout(() => {
+                flashBackground('#9C27B0', 2000); // 紫色のフラッシュ
+            }, 1000);
+        });
+
         // メルド機会表示関数
         function showMeldOpportunities(data) {
             const { discardedTile, discardPlayerId, opportunities, autoPaused } = data;
@@ -1473,44 +1972,88 @@
             console.log('🀄 [DEBUG] showMeldOpportunities呼び出し');
             console.log('🀄 [DEBUG] myOpportunity:', myOpportunity);
             
-            // ボタンが存在するかチェック
-            console.log('🀄 [DEBUG] アクションパネル全体:', document.querySelector('.action-panel'));
-            console.log('🀄 [DEBUG] 全てのボタン:', document.querySelectorAll('.action-panel button'));
-            console.log('🀄 [DEBUG] chiBtn by class:', document.querySelector('#chiBtn'));
-            console.log('🀄 [DEBUG] ponBtn by class:', document.querySelector('#ponBtn'));
-            console.log('🀄 [DEBUG] kanBtn by class:', document.querySelector('#kanBtn'));
-            
             if (myOpportunity) {
                 console.log('🀄 自分にメルド機会:', myOpportunity);
                 console.log('🀄 [DEBUG] chi:', myOpportunity.chi, 'pon:', myOpportunity.pon, 'kan:', myOpportunity.kan);
                 
-                // ボタン要素の存在確認
+                // 改善されたメルド選択UIを自動表示
+                if (gameState && gameState.players && gameState.players[0]) {
+                    const myTiles = gameState.players[0].hand.tiles;
+                    const discarded = lastDiscardedTile || discardedTile;
+                    
+                    if (discarded && myTiles) {
+                        // 全ての可能なメルドを自動検索して選択UIを表示
+                        const chiCombinations = findChiCombinations(myTiles, discarded);
+                        const ponTiles = findPonTiles(myTiles, discarded);
+                        const kanTiles = findKanTiles(myTiles, discarded);
+                        
+                        const allOptions = [];
+                        
+                        // 実際に可能なメルドのみを追加
+                        if (myOpportunity.chi && chiCombinations.length > 0) {
+                            chiCombinations.forEach((combo, index) => {
+                                allOptions.push({
+                                    type: 'chi',
+                                    displayName: `チー: ${combo.map(t => getTileDisplayName(t)).join('')}`,
+                                    tiles: combo,
+                                    discardedTile: discarded
+                                });
+                            });
+                        }
+                        
+                        if (myOpportunity.pon && ponTiles.length >= 2) {
+                            allOptions.push({
+                                type: 'pon',
+                                displayName: `ポン: ${getTileDisplayName(discarded)}${getTileDisplayName(discarded)}${getTileDisplayName(discarded)}`,
+                                tiles: ponTiles,
+                                discardedTile: discarded
+                            });
+                        }
+                        
+                        if (myOpportunity.kan && kanTiles.length >= 3) {
+                            allOptions.push({
+                                type: 'kan',
+                                displayName: `カン: ${getTileDisplayName(discarded)}${getTileDisplayName(discarded)}${getTileDisplayName(discarded)}${getTileDisplayName(discarded)}`,
+                                tiles: kanTiles,
+                                discardedTile: discarded
+                            });
+                        }
+                        
+                        if (allOptions.length > 0) {
+                            // 改善された選択UIを表示
+                            showMeldSelectionUI(allOptions);
+                        }
+                    }
+                }
+                
+                // 従来のボタン表示も維持（バックアップ）
                 const chiBtn = document.getElementById('chiBtn');
                 const ponBtn = document.getElementById('ponBtn');
                 const kanBtn = document.getElementById('kanBtn');
                 
-                console.log('🀄 [DEBUG] chiBtn要素:', chiBtn);
-                console.log('🀄 [DEBUG] ponBtn要素:', ponBtn);
-                console.log('🀄 [DEBUG] kanBtn要素:', kanBtn);
-                
-                // メルドボタンを強制表示
-                if (chiBtn) {
+                if (chiBtn && myOpportunity.chi) {
                     chiBtn.style.display = 'inline-block';
                     chiBtn.style.visibility = 'visible';
-                    console.log('🀄 [DEBUG] チーボタン表示設定完了');
                 }
-                if (ponBtn) {
+                if (ponBtn && myOpportunity.pon) {
                     ponBtn.style.display = 'inline-block';
                     ponBtn.style.visibility = 'visible';
-                    console.log('🀄 [DEBUG] ポンボタン表示設定完了');
                 }
-                if (kanBtn) {
+                if (kanBtn && myOpportunity.kan) {
                     kanBtn.style.display = 'inline-block';
                     kanBtn.style.visibility = 'visible';
-                    console.log('🀄 [DEBUG] カンボタン表示設定完了');
                 }
                 
-                console.log('🀄 [DEBUG] ボタン表示設定完了');
+                // ロンボタンの表示制御（メルド機会時も和了優先）
+                const ronBtn = document.getElementById('ronBtn');
+                if (ronBtn && canCallRon()) {
+                    ronBtn.style.display = 'inline-block';
+                    ronBtn.style.visibility = 'visible';
+                    console.log('🎯 ロンボタンを表示（メルド機会と同時）');
+                }
+                
+                // アクションボタン全体を更新（ロンボタンも含めて）
+                updateActionButtons();
                 
                 // 通知表示
                 const meldTypes = [];
@@ -1528,7 +2071,7 @@
                 // 10秒後にボタンを非表示（オート停止時は長めに）
                 setTimeout(() => {
                     hideMeldButtons();
-                }, autoPaused ? 10000 : 5000);
+                }, autoPaused ? 15000 : 8000);
             } else {
                 hideMeldButtons();
             }
@@ -1619,18 +2162,226 @@
             
             showNotification('新しいゲームを作成中...', 'info');
             
+            // ゲーム状態をリセット
+            resetGameState();
+            
             // Socket.IOでルーム作成要求
             socket.emit('createRoom', {
                 playerId: 'player_0',
                 playerName: 'プレイヤー1'
             });
         }
+        
+        // ゲーム状態リセット関数
+        function resetGameState() {
+            // 強化版ロジック用の変数をリセット
+            melds = [];
+            gameSettings = {
+                gameWind: 'east',
+                playerWind: 'east',
+                round: 1
+            };
+            
+            // 選択状態をリセット
+            selectedTile = null;
+            lastDiscardedTile = null;
+            lastDiscardedPlayer = null;
+            gameStartNotified = false;
+            currentTenpaiStatus = { isTenpai: false, waitingTiles: [] };
+            
+            // UI要素をクリア
+            clearMeldDisplays();
+            clearTenpaiDisplays();
+            clearActionButtons();
+            
+            console.log('🔄 ゲーム状態がリセットされました');
+        }
+        
+        // メルド表示をクリア
+        function clearMeldDisplays() {
+            for (let i = 0; i < 4; i++) {
+                const meldArea = document.getElementById(`melds${i}`);
+                if (meldArea) {
+                    meldArea.innerHTML = '';
+                }
+            }
+        }
+        
+        // テンパイ表示をクリア
+        function clearTenpaiDisplays() {
+            document.querySelectorAll('.tenpai-indicator').forEach(indicator => {
+                indicator.remove();
+            });
+        }
+        
+        // アクションボタンをクリア
+        function clearActionButtons() {
+            const actionButtons = document.querySelector('.action-buttons');
+            if (actionButtons) {
+                actionButtons.style.display = 'none';
+            }
+            
+            // メルド選択UIも非表示
+            const meldSelection = document.querySelector('.meld-selection');
+            if (meldSelection) {
+                meldSelection.style.display = 'none';
+            }
+        }
+        
+        // 局変更時のリセット処理
+        function resetRoundState() {
+            console.log('🔄 局変更時のリセット処理を実行');
+            
+            // 強化版ロジック用の変数をリセット（一部のみ）
+            melds = [];
+            lastDiscardedTile = null;
+            lastDiscardedPlayer = null;
+            selectedTile = null;
+            
+            // UI要素をクリア
+            clearMeldDisplays();
+            clearTenpaiDisplays();
+            clearActionButtons();
+            clearRoundSpecificUI();
+            
+            // 風設定を更新（局に応じて）
+            if (gameState && gameState.round) {
+                gameSettings.round = gameState.round.roundNumber || 1;
+                // 自風は通常東→南→西→北の順で変わる
+                const windOrder = ['east', 'south', 'west', 'north'];
+                gameSettings.playerWind = windOrder[(gameState.round.roundNumber - 1) % 4] || 'east';
+            }
+            
+            console.log('🔄 局リセット完了 - 新しい風設定:', gameSettings);
+        }
+        
+        // 局固有のUI要素をクリア
+        function clearRoundSpecificUI() {
+            // メルド選択モーダルを削除
+            const existingModals = document.querySelectorAll('.meld-selection-modal');
+            existingModals.forEach(modal => modal.remove());
+            
+            // 勝利表示を削除
+            const winDisplays = document.querySelectorAll('.win-celebration, .win-display, .win-result-modal');
+            winDisplays.forEach(display => display.remove());
+            
+            // リーチ棒表示をリセット
+            const riichiStick = document.getElementById('riichiStick');
+            if (riichiStick) {
+                riichiStick.style.display = 'none';
+            }
+            
+            // 紙吹雪やエフェクトをクリア
+            const confettiContainers = document.querySelectorAll('.confetti-container');
+            confettiContainers.forEach(container => container.remove());
+            
+            // 河（捨て牌エリア）をクリア
+            clearDiscardAreas();
+        }
+        
+        // 河エリアをクリア
+        function clearDiscardAreas() {
+            for (let i = 0; i < 4; i++) {
+                const riverArea = document.getElementById(`river${i}`);
+                if (riverArea) {
+                    riverArea.innerHTML = '';
+                }
+            }
+        }
+        
+        // UI同期チェック（デバッグ用）
+        function checkUISync() {
+            console.log('🔍 UI同期チェック実行');
+            
+            const report = {
+                gameState: !!gameState,
+                currentRound: currentRoundNumber,
+                currentHonba: currentHonbaCount,
+                melds: melds.length,
+                selectedTile: !!selectedTile,
+                lastDiscarded: !!lastDiscardedTile,
+                tenpaiStatus: currentTenpaiStatus.isTenpai,
+                visibleModals: document.querySelectorAll('.meld-selection-modal, .win-result-modal').length,
+                visibleTenpaiIndicators: document.querySelectorAll('.tenpai-indicator').length,
+                displayedMelds: Array.from({length: 4}, (_, i) => {
+                    const meldElement = document.getElementById(`melds${i}`);
+                    return meldElement ? meldElement.children.length : 0;
+                })
+            };
+            
+            console.log('📊 UI状態レポート:', report);
+            
+            // 異常がある場合の自動修正
+            if (report.visibleModals > 1) {
+                console.warn('⚠️ 複数のモーダルが表示されています。クリーンアップします。');
+                clearRoundSpecificUI();
+            }
+            
+            // メルド表示の強制チェック
+            if (gameState && gameState.players) {
+                let hasStaleDisplays = false;
+                gameState.players.forEach((player, i) => {
+                    const actualMelds = player.hand?.melds?.length || 0;
+                    const displayedMelds = report.displayedMelds[i];
+                    if (actualMelds === 0 && displayedMelds > 0) {
+                        console.warn(`⚠️ プレイヤー${i}のメルド表示が古い状態です。クリア中...`);
+                        const meldElement = document.getElementById(`melds${i}`);
+                        if (meldElement) {
+                            meldElement.innerHTML = '';
+                        }
+                        hasStaleDisplays = true;
+                    }
+                });
+                
+                if (hasStaleDisplays) {
+                    console.log('🔄 古いメルド表示をクリアしました');
+                }
+            }
+            
+            return report;
+        }
+        
+        // 強制メルドクリア（デバッグ用）
+        function forceClearMelds() {
+            console.log('🧹 強制メルドクリア実行');
+            clearMeldDisplays();
+            melds = [];
+            console.log('✅ メルド表示とクライアント変数をクリアしました');
+        }
+
+        // 現在の局番号を追跡（新局検出用）
+        let currentRoundNumber = 1;
+        let currentHonbaCount = 0;
 
         // ゲーム状態更新
         function updateGameDisplay() {
             if (!gameState) {
                 console.log('🔍 DEBUG: gameState is null or undefined');
                 return;
+            }
+
+            // 新しい局の開始を検出
+            const newRoundNumber = gameState.round?.roundNumber || 1;
+            const newHonbaCount = gameState.round?.honbaCount || 0;
+            
+            // より確実な新局検出（残り牌数と手牌枚数もチェック）
+            const isNewRound = (newRoundNumber !== currentRoundNumber || newHonbaCount !== currentHonbaCount) ||
+                              (gameState.remainingTiles >= 65 && gameState.players?.some(p => p.hand?.tiles?.length === 13));
+            
+            if (newRoundNumber !== currentRoundNumber || newHonbaCount !== currentHonbaCount) {
+                console.log(`🔄 新しい局を検出: ${currentRoundNumber}局→${newRoundNumber}局, ${currentHonbaCount}本場→${newHonbaCount}本場`);
+                
+                // 局変更時のリセット処理
+                resetRoundState();
+                
+                currentRoundNumber = newRoundNumber;
+                currentHonbaCount = newHonbaCount;
+            }
+            
+            // ゲーム開始直後の初期化チェック（全プレイヤーのメルドが空の場合）
+            if (gameState.remainingTiles >= 65 && gameState.players?.every(p => p.hand?.melds?.length === 0)) {
+                console.log('🔄 ゲーム開始/新局を検出 - メルド表示をクリア');
+                clearMeldDisplays();
             }
 
             // console.log('🔍 DEBUG: updateGameDisplay called');
@@ -1693,6 +2444,9 @@
                 
                 if (nameElement) nameElement.textContent = player.name;
                 if (windElement) windElement.textContent = player.wind;
+                
+                // リーチ表示の更新
+                updateRiichiDisplay(playerElement, player, index);
 
                     // 手牌更新
                     const handElement = document.getElementById(`hand${index}`);
@@ -1705,15 +2459,59 @@
                         
                         if (index === 0) {
                             // プレイヤーの手牌（表示）
+                            // 総牌数を計算
+                            const totalTiles = player.hand.tiles.length + (player.hand.melds?.length || 0) * 3;
+                            
                             console.log(`🔍 DEBUG: Updating player 0 hand with ${player.hand.tiles.length} tiles`);
-                            player.hand.tiles.forEach((tile, tileIndex) => {
-                                const tileElement = document.createElement('div');
-                                tileElement.className = 'tile';
-                                if (tile.isRed) tileElement.classList.add('red');
-                                tileElement.textContent = tile.displayName || tile.unicode;
-                                tileElement.onclick = () => selectTile(index, tileIndex, tile);
-                                handElement.appendChild(tileElement);
-                            });
+                            console.log(`🔍 DEBUG: Tile order:`, player.hand.tiles.map((t, i) => `${i}: ${t.suit}${t.rank || ''} (id:${t.id})`));
+                            console.log(`🔍 DEBUG: Current player:`, gameState.currentPlayer, 'Total tiles:', totalTiles);
+                            
+                            // サーバー側で牌順を維持するため、そのまま表示
+                            let displayTiles = [...player.hand.tiles];
+                            
+                            try {
+                                displayTiles.forEach((tile, tileIndex) => {
+                                    if (!tile) {
+                                        console.warn('🔍 Skipping null/undefined tile at index', tileIndex);
+                                        return;
+                                    }
+                                    
+                                    const tileElement = document.createElement('div');
+                                    tileElement.className = 'tile';
+                                    if (tile.isRed) tileElement.classList.add('red');
+                                    if (tile.suit) tileElement.classList.add(tile.suit); // 色分け用クラス追加
+                                    
+                                    // 最後の牌（14枚目）をツモ牌として扱う
+                                    if (totalTiles === 14 && tileIndex === displayTiles.length - 1) {
+                                        tileElement.classList.add('tsumo');
+                                        console.log(`🔍 DEBUG: Tsumo tile detected at index ${tileIndex}`);
+                                    }
+                                    
+                                    tileElement.textContent = getTileDisplayName(tile);
+                                    
+                                    // 元の配列でのインデックスを取得してselectTileに渡す
+                                    const originalIndex = player.hand.tiles.findIndex(t => t && t.id === tile.id);
+                                    tileElement.onclick = () => selectTile(index, originalIndex >= 0 ? originalIndex : tileIndex, tile);
+                                    handElement.appendChild(tileElement);
+                                });
+                                
+                                console.log(`🔍 DEBUG: Successfully rendered ${displayTiles.length} tiles`);
+                            } catch (error) {
+                                console.error('🔍 Error rendering tiles:', error);
+                                // フォールバック: 元の配列をそのまま表示
+                                player.hand.tiles.forEach((tile, tileIndex) => {
+                                    if (!tile) return;
+                                    
+                                    const tileElement = document.createElement('div');
+                                    tileElement.className = 'tile';
+                                    if (tile.isRed) tileElement.classList.add('red');
+                                    if (tile.suit) tileElement.classList.add(tile.suit);
+                                    
+                                    tileElement.textContent = getTileDisplayName(tile);
+                                    tileElement.onclick = () => selectTile(index, tileIndex, tile);
+                                    handElement.appendChild(tileElement);
+                                });
+                            }
                             
                             // プレイヤー詳細情報更新
                             document.getElementById('handCount').textContent = player.hand.tiles.length;
@@ -1760,6 +2558,7 @@
                             
                             // 赤牌処理
                             if (tile.isRed) tileElement.classList.add('red');
+                            if (tile.suit) tileElement.classList.add(tile.suit); // 色分け用クラス追加
                             
                             // リーチ宣言牌は横向き
                             if (player.hand.riichi && player.hand.riichiTile && 
@@ -1772,7 +2571,7 @@
                                 tileElement.classList.add('called');
                             }
                             
-                            tileElement.textContent = tile.displayName || tile.unicode;
+                            tileElement.textContent = getTileDisplayName(tile);
                             
                             // プレイヤー位置に応じた牌の回転
                             switch (playerIndex) {
@@ -1819,7 +2618,13 @@
             
             gameState.players.forEach((player, playerIndex) => {
                 const meldElement = document.getElementById(`melds${playerIndex}`);
-                if (!meldElement || !player.hand || !player.hand.melds) return;
+                if (!meldElement) return;
+                
+                // プレイヤーにメルドデータがない場合は表示をクリア
+                if (!player.hand || !player.hand.melds || player.hand.melds.length === 0) {
+                    meldElement.innerHTML = '';
+                    return;
+                }
                 
                 meldElement.innerHTML = '';
                 
@@ -1875,7 +2680,8 @@
                             tileElement.textContent = '🀫';
                             tileElement.style.background = '#e9ecef';
                         } else {
-                            tileElement.textContent = tile.displayName || tile.unicode;
+                            tileElement.textContent = getTileDisplayName(tile);
+                            if (tile.suit) tileElement.classList.add(tile.suit); // 色分け用クラス追加
                             if (tile.isRed) {
                                 tileElement.style.color = '#dc3545';
                                 tileElement.style.fontWeight = '800';
@@ -1892,25 +2698,21 @@
 
         // 河の配置順序計算（本格麻雀仕様）
         function calculateRiverOrder(playerIndex, discardIndex) {
+            // デバッグ用：固定位置でテスト
+            if (discardIndex === 0) {
+                // 1枚目の固定位置
+                switch (playerIndex) {
+                    case 0: return 0;  // 左上
+                    case 1: return 8;  // 下の中央
+                    case 2: return 15; // 右上  
+                    case 3: return 3;  // 上の右
+                }
+            }
+            
+            // 2枚目以降は順番に
             const row = Math.floor(discardIndex / 6);
             const col = discardIndex % 6;
-            
-            switch (playerIndex) {
-                case 0: // 下部プレイヤー（自分）：左から右、上から下、6枚で改行
-                    return row * 6 + col;
-                case 1: // 左プレイヤー（南）：上から下、右から左、3列6行（横向き視点）
-                    const rowSouth = Math.floor(discardIndex / 6);
-                    const colSouth = discardIndex % 6;
-                    return colSouth * 6 + rowSouth;
-                case 2: // 上部プレイヤー（西）：右から左、下から上（対面視点）
-                    return (2 - row) * 6 + (5 - col);
-                case 3: // 右プレイヤー（北）：下から上、左から右、3列6行（横向き視点）
-                    const rowNorth = Math.floor(discardIndex / 6);
-                    const colNorth = discardIndex % 6;
-                    return (5 - colNorth) * 6 + (2 - rowNorth);
-                default:
-                    return discardIndex;
-            }
+            return row * 6 + col;
         }
         
         // 牌が同じかチェック
@@ -1958,7 +2760,8 @@
             if (gameState.lastDiscard && gameState.lastDiscardPlayer !== undefined && gameState.lastDiscardPlayer !== null) {
                 lastDiscardedTile = gameState.lastDiscard;
                 lastDiscardedPlayer = gameState.lastDiscardPlayer;
-                console.log(`🔧 Last discard from gameState: ${lastDiscardedTile.displayName} by player ${lastDiscardedPlayer}`);
+                console.log(`🔧 Last discard from gameState: ${lastDiscardedTile.displayName || lastDiscardedTile.suit + lastDiscardedTile.rank} by player ${lastDiscardedPlayer}`);
+                console.log('🔧 lastDiscardedTile object:', lastDiscardedTile);
                 return;
             }
             
@@ -2007,8 +2810,30 @@
             statusElement.textContent = statusText;
             statusElement.style.color = isMyTurn ? '#28a745' : '#6c757d';
             
+            // ドラ表示の更新
+            updateDoraDisplay();
+            
             // アクションボタンの表示制御
             updateActionButtons();
+        }
+        
+        function updateDoraDisplay() {
+            const doraElement = document.getElementById('doraDisplay');
+            if (!gameState || !doraElement) return;
+            
+            let doraText = '?';
+            if (gameState.doraIndicators && gameState.doraIndicators.length > 0) {
+                // 表示されているドラ表示牌を表示
+                const doraIndicators = gameState.doraIndicators.map(tile => 
+                    tile.displayName || tile.unicode || '?'
+                ).join(' ');
+                doraText = doraIndicators;
+            } else if (gameState.dora) {
+                // 旧形式のドラ表示
+                doraText = gameState.dora.displayName || gameState.dora.unicode || '?';
+            }
+            
+            doraElement.textContent = doraText;
         }
         
         // アクションボタンの表示制御
@@ -2017,7 +2842,16 @@
             
             const isMyTurn = gameState.currentPlayer === 0;
             const player = gameState.players?.[0];
-            const handCount = player?.hand?.tiles?.length || 0;
+            const handTiles = player?.hand?.tiles?.length || 0;
+            const meldCount = player?.hand?.melds?.length || 0;
+            const totalTiles = handTiles + (meldCount * 3);
+            
+            console.log('🔍 updateActionButtons DEBUG:', {
+                handTiles,
+                meldCount,
+                totalTiles,
+                isMyTurn
+            });
             
             // メルド機会があるかチェック（lastDiscardedTileが設定されている場合）
             const hasMeldOpportunity = lastDiscardedTile && lastDiscardedTile.playerId !== 0;
@@ -2028,10 +2862,10 @@
             const riichiBtn = document.getElementById('riichiBtn');
             const tsumoBtn = document.getElementById('tsumoBtn');
             
-            if (drawBtn) drawBtn.style.display = (isMyTurn && handCount === 13) ? 'inline-block' : 'none';
-            if (discardBtn) discardBtn.style.display = (isMyTurn && handCount === 14) ? 'inline-block' : 'none';
-            if (riichiBtn) riichiBtn.style.display = (isMyTurn && handCount === 14 && canCallRiichi()) ? 'inline-block' : 'none';
-            if (tsumoBtn) tsumoBtn.style.display = (isMyTurn && handCount === 14 && canCallTsumo()) ? 'inline-block' : 'none';
+            if (drawBtn) drawBtn.style.display = (isMyTurn && totalTiles === 13) ? 'inline-block' : 'none';
+            if (discardBtn) discardBtn.style.display = (isMyTurn && totalTiles === 14) ? 'inline-block' : 'none';
+            if (riichiBtn) riichiBtn.style.display = (isMyTurn && totalTiles === 14 && canCallRiichi()) ? 'inline-block' : 'none';
+            if (tsumoBtn) tsumoBtn.style.display = (isMyTurn && totalTiles === 14 && canCallTsumo()) ? 'inline-block' : 'none';
             
             // メルドボタンは相手のターンでも表示可能
             const chiBtn = document.getElementById('chiBtn');
@@ -2043,8 +2877,22 @@
             // メルド機会がない場合のみ非表示にする
             if (chiBtn && !hasMeldOpportunity) chiBtn.style.display = 'none';  
             if (ponBtn && !hasMeldOpportunity) ponBtn.style.display = 'none';  
-            if (kanBtn && !hasMeldOpportunity) kanBtn.style.display = 'none';
-            if (ronBtn) ronBtn.style.display = (!isMyTurn && canCallRon()) ? 'inline-block' : 'none';
+            
+            // カンボタンは加槓・暗槓可能な場合も表示
+            const canKakan = isMyTurn && canCallKakan();
+            const canAnkan = isMyTurn && canCallAnkan();
+            const canAnyKan = canKakan || canAnkan;
+            
+            if (kanBtn && !hasMeldOpportunity && !canAnyKan) kanBtn.style.display = 'none';
+            if (kanBtn && canAnyKan) kanBtn.style.display = 'inline-block';
+            const canRon = canCallRon();
+            console.log('🔍 ロンボタン制御:', {
+                isMyTurn: isMyTurn,
+                canRon: canRon,
+                lastDiscardedTile: lastDiscardedTile,
+                shouldShowRon: !isMyTurn && canRon
+            });
+            if (ronBtn) ronBtn.style.display = (!isMyTurn && canRon) ? 'inline-block' : 'none';
             
             // 捨て牌更新を追跡
             trackDiscardUpdates();
@@ -2057,73 +2905,333 @@
             return !player.hand.riichi && player.score >= 1000; // 既にリーチしてない、1000点以上ある
         }
         
+        // 加槓可能かチェック
+        function canCallKakan() {
+            if (!gameState || !gameState.players[0]) return false;
+            
+            const player = gameState.players[0];
+            const myTiles = player.hand.tiles || [];
+            const myMelds = player.hand.melds || [];
+            
+            // ポンがあるかチェック
+            for (const meld of myMelds) {
+                if (meld.type === 'pon') {
+                    const meldTile = meld.tiles[0];
+                    // 手牌に同じ牌があるかチェック
+                    for (const handTile of myTiles) {
+                        if (isSameTile(handTile, meldTile)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            
+            return false;
+        }
+        
+        // 暗槓可能かチェック
+        function canCallAnkan() {
+            if (!gameState || !gameState.players[0]) return false;
+            
+            const player = gameState.players[0];
+            const myTiles = player.hand.tiles || [];
+            
+            // 手牌で4枚同じ牌があるかチェック
+            const tileCounts = {};
+            for (const tile of myTiles) {
+                const key = `${tile.suit}_${tile.rank}_${tile.honor}`;
+                if (!tileCounts[key]) tileCounts[key] = [];
+                tileCounts[key].push(tile);
+            }
+            
+            // 4枚揃っている牌があるかチェック
+            for (const [key, tiles] of Object.entries(tileCounts)) {
+                if (tiles.length >= 4) {
+                    console.log('🔍 暗槓可能:', key, tiles);
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+        
         function canCallTsumo() {
             if (!gameState || !gameState.players[0]) return false;
             
             const player = gameState.players[0];
-            const handCount = player.hand.tiles.length;
+            const handTiles = player.hand.tiles.length;
+            const meldCount = player.hand.melds ? player.hand.melds.length : 0;
+            const totalTiles = handTiles + (meldCount * 3);
             
-            // 14枚でないとツモできない
-            if (handCount !== 14) return false;
+            console.log('🔍 canCallTsumo DEBUG:', {
+                handTiles,
+                meldCount,
+                totalTiles,
+                currentPlayer: gameState.currentPlayer
+            });
+            
+            // 総牌数が14枚でないとツモできない
+            if (totalTiles !== 14) return false;
             
             // 自分のターンでないとツモできない
             if (gameState.currentPlayer !== 0) return false;
             
             // 実際の和了形チェック
-            return checkClientWinning(player.hand.tiles, player.hand.melds);
+            const canWin = checkClientWinning(player.hand.tiles, player.hand.melds);
+            console.log('🔍 canCallTsumo 和了チェック:', {
+                tiles: player.hand.tiles,
+                melds: player.hand.melds,
+                canWin: canWin
+            });
+            return canWin;
         }
 
-        // テンパイ判定（簡易版）
+        // テンパイ判定（改善版：サーバー情報優先）
         function checkClientTenpai() {
             if (!gameState || !gameState.players[0]) {
                 return { isTenpai: false, waitingTiles: [] };
             }
             
             const player = gameState.players[0];
-            const handCount = player.hand.tiles.length + (player.hand.melds.length * 3);
+            
+            // サーバーからのテンパイ情報がある場合はそれを優先
+            if (player.tenpaiInfo) {
+                return {
+                    isTenpai: player.tenpaiInfo.isTenpai,
+                    waitingTiles: player.tenpaiInfo.waitingTiles || [],
+                    waitType: player.tenpaiInfo.waitType,
+                    isFuriten: player.tenpaiInfo.isFuriten
+                };
+            }
+            
+            // サーバー情報がない場合の簡易判定
+            const handTiles = player.hand.tiles.length;
+            const meldCount = player.hand.melds ? player.hand.melds.length : 0;
+            const totalTiles = handTiles + (meldCount * 3);
+            
+            console.log('🔍 checkClientTenpai DEBUG:', {
+                handTiles,
+                meldCount,
+                totalTiles,
+                actualTiles: player.hand.tiles,
+                actualMelds: player.hand.melds
+            });
             
             // 13枚の場合のみテンパイチェック
-            if (handCount !== 13) {
+            if (totalTiles !== 13) {
                 return { isTenpai: false, waitingTiles: [] };
             }
             
-            // 簡易的なテンパイ判定
-            // 実際の詳細判定はサーバー側で行う
-            const tiles = player.hand.tiles;
-            
-            // 基本的な形の確認（非常に簡易版）
-            // 実装を簡単にするため、とりあえず手牌が13枚で特定条件を満たす場合にテンパイとする
-            
-            // 牌の種類をカウント
-            const tileCounts = {};
-            for (const tile of tiles) {
-                const key = tile.honor ? `ji_${tile.honor}` : `${tile.suit}_${tile.rank}`;
-                tileCounts[key] = (tileCounts[key] || 0) + 1;
-            }
-            
-            // 対子の数をカウント
-            let pairCount = 0;
-            let tripleCount = 0;
-            for (const count of Object.values(tileCounts)) {
-                if (count === 2) pairCount++;
-                if (count === 3) tripleCount++;
-            }
-            
-            // 非常に簡易的な判定：対子が複数あるか、刻子がある場合にテンパイの可能性
-            const isPossiblyTenpai = pairCount >= 1 || tripleCount >= 1;
-            
-            if (isPossiblyTenpai) {
-                // 簡易的な待ち牌生成（実際はもっと複雑）
-                const waitingTiles = [
-                    { suit: 'man', rank: 1, displayName: '1万' },
-                    { suit: 'pin', rank: 1, displayName: '1筒' },
-                    { suit: 'sou', rank: 1, displayName: '1索' }
-                ];
+            // より正確なテンパイ判定（強化版ロジックを使用）
+            try {
+                const handForAnalysis = convertTilesToAdvancedFormat(player.hand.tiles);
+                const meldsForAnalysis = convertMeldsToAdvancedFormat(player.hand.melds || []);
                 
-                return { isTenpai: true, waitingTiles };
+                // 各牌を追加してみて和了形になるかチェック
+                const allTileTypes = generateAllTileTypes();
+                const waitingTiles = [];
+                
+                for (const testTile of allTileTypes) {
+                    const testHand = [...handForAnalysis, testTile];
+                    if (isCompleteHand(testHand, meldsForAnalysis)) {
+                        // 役があるかチェック
+                        const yaku = calculateAdvancedYaku(testHand, meldsForAnalysis);
+                        
+                        console.log('🔍 テンパイ役判定:', {
+                            testTile: testTile,
+                            hand: testHand,
+                            melds: meldsForAnalysis,
+                            yaku: yaku
+                        });
+                        
+                        const waitingTileInfo = {
+                            suit: testTile.suit,
+                            rank: testTile.rank,
+                            honor: testTile.type || null,
+                            displayName: getTileDisplayName(testTile),
+                            hasYaku: yaku.length > 0,
+                            yaku: yaku
+                        };
+                        
+                        // 役がある場合、または役なしでも和了形の場合は追加
+                        if (yaku.length > 0 || isCompleteHand(testHand, meldsForAnalysis)) {
+                            waitingTiles.push(waitingTileInfo);
+                        }
+                    }
+                }
+                
+                return {
+                    isTenpai: waitingTiles.length > 0,
+                    waitingTiles: waitingTiles
+                };
+                
+            } catch (error) {
+                console.warn('テンパイ判定エラー:', error);
+                return { isTenpai: false, waitingTiles: [] };
+            }
+        }
+        
+        // 全牌種類生成
+        function generateAllTileTypes() {
+            const tiles = [];
+            
+            // 数牌
+            ['man', 'pin', 'sou'].forEach(suit => {
+                for (let rank = 1; rank <= 9; rank++) {
+                    tiles.push({ suit, rank });
+                }
+            });
+            
+            // 字牌
+            ['east', 'south', 'west', 'north', 'haku', 'hatsu', 'chun'].forEach(type => {
+                tiles.push({ suit: 'honors', type });
+            });
+            
+            return tiles;
+        }
+        
+        // より詳細な基本形和了チェック
+        function checkBasicWinForm(hand, melds = []) {
+            if (!hand || hand.length === 0) return false;
+            
+            // 手牌を数牌と字牌に分ける
+            const numberTiles = {};
+            const honorTiles = {};
+            
+            for (const tile of hand) {
+                if (tile.suit && (tile.suit === 'man' || tile.suit === 'pin' || tile.suit === 'sou')) {
+                    if (!numberTiles[tile.suit]) numberTiles[tile.suit] = {};
+                    const rank = tile.rank || tile.number;
+                    numberTiles[tile.suit][rank] = (numberTiles[tile.suit][rank] || 0) + 1;
+                } else {
+                    const key = tile.honor || tile.type || `${tile.suit}_${tile.rank}`;
+                    honorTiles[key] = (honorTiles[key] || 0) + 1;
+                }
             }
             
-            return { isTenpai: false, waitingTiles: [] };
+            // 面子と雀頭の組み合わせを再帰的にチェック
+            const requiredMentsus = 4 - melds.length;
+            return checkMentsuCombination(numberTiles, honorTiles, requiredMentsus, 0, false);
+        }
+        
+        // 面子組み合わせの再帰チェック
+        function checkMentsuCombination(numberTiles, honorTiles, requiredMentsus, foundMentsus, hasJantou) {
+            // 必要な面子数に達した場合
+            if (foundMentsus >= requiredMentsus) {
+                // 雀頭があるかチェック
+                if (hasJantou) {
+                    // 残り牌がないかチェック
+                    const remainingTiles = countRemainingTiles(numberTiles, honorTiles);
+                    return remainingTiles === 0;
+                } else {
+                    // 雀頭を作れるかチェック
+                    const remainingTiles = countRemainingTiles(numberTiles, honorTiles);
+                    return remainingTiles === 2 && canMakeJantou(numberTiles, honorTiles);
+                }
+            }
+            
+            // 字牌の刻子をチェック
+            for (const [type, count] of Object.entries(honorTiles)) {
+                if (count >= 3) {
+                    honorTiles[type] -= 3;
+                    if (checkMentsuCombination(numberTiles, honorTiles, requiredMentsus, foundMentsus + 1, hasJantou)) {
+                        honorTiles[type] += 3;
+                        return true;
+                    }
+                    honorTiles[type] += 3;
+                }
+            }
+            
+            // 数牌の面子をチェック
+            for (const suit of ['man', 'pin', 'sou']) {
+                if (numberTiles[suit]) {
+                    // 刻子チェック
+                    for (let rank = 1; rank <= 9; rank++) {
+                        if ((numberTiles[suit][rank] || 0) >= 3) {
+                            numberTiles[suit][rank] -= 3;
+                            if (checkMentsuCombination(numberTiles, honorTiles, requiredMentsus, foundMentsus + 1, hasJantou)) {
+                                numberTiles[suit][rank] += 3;
+                                return true;
+                            }
+                            numberTiles[suit][rank] += 3;
+                        }
+                    }
+                    
+                    // 順子チェック
+                    for (let rank = 1; rank <= 7; rank++) {
+                        if ((numberTiles[suit][rank] || 0) >= 1 && 
+                            (numberTiles[suit][rank + 1] || 0) >= 1 && 
+                            (numberTiles[suit][rank + 2] || 0) >= 1) {
+                            numberTiles[suit][rank]--;
+                            numberTiles[suit][rank + 1]--;
+                            numberTiles[suit][rank + 2]--;
+                            if (checkMentsuCombination(numberTiles, honorTiles, requiredMentsus, foundMentsus + 1, hasJantou)) {
+                                numberTiles[suit][rank]++;
+                                numberTiles[suit][rank + 1]++;
+                                numberTiles[suit][rank + 2]++;
+                                return true;
+                            }
+                            numberTiles[suit][rank]++;
+                            numberTiles[suit][rank + 1]++;
+                            numberTiles[suit][rank + 2]++;
+                        }
+                    }
+                }
+            }
+            
+            return false;
+        }
+        
+        // 残り牌数をカウント
+        function countRemainingTiles(numberTiles, honorTiles) {
+            let count = 0;
+            
+            for (const suit of Object.values(numberTiles)) {
+                for (const tileCount of Object.values(suit)) {
+                    count += tileCount;
+                }
+            }
+            
+            for (const tileCount of Object.values(honorTiles)) {
+                count += tileCount;
+            }
+            
+            return count;
+        }
+        
+        // 雀頭を作れるかチェック
+        function canMakeJantou(numberTiles, honorTiles) {
+            // 字牌で雀頭
+            for (const count of Object.values(honorTiles)) {
+                if (count === 2) return true;
+            }
+            
+            // 数牌で雀頭
+            for (const suit of Object.values(numberTiles)) {
+                for (const count of Object.values(suit)) {
+                    if (count === 2) return true;
+                }
+            }
+            
+            return false;
+        }
+
+        // 和了形チェック（簡易版）
+        function isCompleteHand(hand, melds = []) {
+            if (!hand) return false;
+            
+            // メルドを考慮した総牌数チェック
+            const totalTiles = hand.length + (melds.length * 3);
+            if (totalTiles !== 14) return false;
+            
+            // 七対子チェック（メルドがない場合のみ）
+            if (melds.length === 0 && checkChiitoiAdvanced(hand)) return true;
+            
+            // 国士無双チェック（メルドがない場合のみ）
+            if (melds.length === 0 && checkKokushiAdvanced(hand)) return true;
+            
+            // 基本形チェック（4面子1雀頭）- より詳細な判定
+            return checkBasicWinForm(hand, melds);
         }
 
         // テンパイ状態を更新・表示
@@ -2132,13 +3240,34 @@
             
             const newTenpaiStatus = checkClientTenpai();
             
-            // テンパイ状態が変わった場合のみ更新
-            if (newTenpaiStatus.isTenpai !== currentTenpaiStatus.isTenpai) {
+            // テンパイ状態や待ち牌が変わった場合のみ更新
+            const waitingTilesChanged = JSON.stringify(newTenpaiStatus.waitingTiles) !== JSON.stringify(currentTenpaiStatus.waitingTiles);
+            
+            if (newTenpaiStatus.isTenpai !== currentTenpaiStatus.isTenpai || waitingTilesChanged) {
                 currentTenpaiStatus = newTenpaiStatus;
                 
                 if (currentTenpaiStatus.isTenpai) {
-                    const waitingText = currentTenpaiStatus.waitingTiles.map(t => t.displayName).join('・');
-                    showNotification(`テンパイ！ 待ち: ${waitingText}`, 'info');
+                    // 役あり・役なし待ちを分類
+                    const yakuTiles = currentTenpaiStatus.waitingTiles.filter(t => t.hasYaku);
+                    const noyakuTiles = currentTenpaiStatus.waitingTiles.filter(t => !t.hasYaku);
+                    
+                    let notificationText = 'テンパイ！';
+                    
+                    if (yakuTiles.length > 0) {
+                        const yakuWaitingText = yakuTiles.map(t => t.displayName).join('・');
+                        notificationText += ` 役あり待ち: ${yakuWaitingText}`;
+                    }
+                    
+                    if (noyakuTiles.length > 0) {
+                        const noyakuWaitingText = noyakuTiles.map(t => t.displayName).join('・');
+                        if (yakuTiles.length > 0) {
+                            notificationText += ` / 役なし: ${noyakuWaitingText}`;
+                        } else {
+                            notificationText += ` 役なし待ち: ${noyakuWaitingText}`;
+                        }
+                    }
+                    
+                    showNotification(notificationText, yakuTiles.length > 0 ? 'success' : 'warning');
                     console.log('🎯 テンパイ状態:', currentTenpaiStatus);
                 } else {
                     console.log('🎯 テンパイ解除');
@@ -2174,11 +3303,35 @@
             }
             
             if (currentTenpaiStatus.isTenpai) {
-                const waitingText = currentTenpaiStatus.waitingTiles.map(t => t.displayName).join('・');
-                tenpaiDisplay.innerHTML = `
-                    🎯 テンパイ<br>
-                    <small>待ち: ${waitingText}</small>
-                `;
+                // 役あり・役なし待ちを分類
+                const yakuTiles = currentTenpaiStatus.waitingTiles.filter(t => t.hasYaku);
+                const noyakuTiles = currentTenpaiStatus.waitingTiles.filter(t => !t.hasYaku);
+                
+                let content = '🎯 テンパイ<br>';
+                
+                if (yakuTiles.length > 0) {
+                    const yakuText = yakuTiles.map(t => t.displayName).join('・');
+                    content += `<small style="color: #28a745;">役あり: ${yakuText}</small>`;
+                }
+                
+                if (noyakuTiles.length > 0) {
+                    const noyakuText = noyakuTiles.map(t => t.displayName).join('・');
+                    if (yakuTiles.length > 0) {
+                        content += '<br>';
+                    }
+                    content += `<small style="color: #dc3545;">役なし: ${noyakuText}</small>`;
+                }
+                
+                // 背景色を役の有無に応じて変更
+                if (yakuTiles.length > 0) {
+                    tenpaiDisplay.style.background = 'rgba(40, 167, 69, 0.9)'; // 緑（役あり）
+                    tenpaiDisplay.style.color = 'white';
+                } else {
+                    tenpaiDisplay.style.background = 'rgba(255, 193, 7, 0.9)'; // 黄（役なしのみ）
+                    tenpaiDisplay.style.color = '#212529';
+                }
+                
+                tenpaiDisplay.innerHTML = content;
                 tenpaiDisplay.style.display = 'block';
             } else {
                 tenpaiDisplay.style.display = 'none';
@@ -2272,17 +3425,40 @@
             if (!gameState || !gameState.players[0] || !lastDiscardedTile) return false;
             
             const player = gameState.players[0];
-            const handCount = player.hand.tiles.length;
+            const handTiles = player.hand.tiles.length;
+            const meldCount = player.hand.melds ? player.hand.melds.length : 0;
+            const totalTiles = handTiles + (meldCount * 3);
             
-            // 13枚でないとロンできない
-            if (handCount !== 13) return false;
+            console.log('🔍 canCallRon DEBUG:', {
+                handTiles,
+                meldCount,
+                totalTiles,
+                currentPlayer: gameState.currentPlayer,
+                lastDiscardedTile: lastDiscardedTile
+            });
+            
+            // 総牌数が13枚でないとロンできない
+            if (totalTiles !== 13) return false;
             
             // 自分のターンではロンできない
             if (gameState.currentPlayer === 0) return false;
             
             // 捨て牌を加えた14枚での和了形チェック
-            const tilesWithRon = [...player.hand.tiles, lastDiscardedTile.tile];
-            return checkClientWinning(tilesWithRon, player.hand.melds);
+            const discardedTile = lastDiscardedTile.tile || lastDiscardedTile;
+            const tilesWithRon = [...player.hand.tiles, discardedTile];
+            
+            console.log('🔍 ロン判定詳細:', {
+                handTiles: player.hand.tiles,
+                discardedTile: discardedTile,
+                tilesWithRon: tilesWithRon,
+                melds: player.hand.melds,
+                totalTilesWithRon: tilesWithRon.length + (player.hand.melds?.length || 0) * 3
+            });
+            
+            const canWin = checkClientWinning(tilesWithRon, player.hand.melds);
+            console.log('🔍 ロン判定結果:', canWin);
+            
+            return canWin;
         }
 
         // クライアント側和了形チェック（簡易版）
@@ -2293,21 +3469,38 @@
             const totalTiles = tiles.length + (melds.length * 3);
             if (totalTiles !== 14) return false;
             
-            // 基本和了形チェック（4面子1雀頭）
-            if (checkClientBasicWin(tiles, melds)) return true;
-            
-            // 七対子チェック（メルドがない場合のみ）
-            if (melds.length === 0 && checkClientChiitoi(tiles)) return true;
-            
-            return false;
+            try {
+                // 基本和了形チェック（4面子1雀頭）
+                if (checkClientBasicWin(tiles, melds)) return true;
+                
+                // 七対子チェック（メルドがない場合のみ）
+                if (melds.length === 0 && checkClientChiitoi(tiles)) return true;
+                
+                return false;
+            } catch (error) {
+                console.error('🔍 checkClientWinning error:', error);
+                console.error('🔍 tiles:', tiles);
+                console.error('🔍 melds:', melds);
+                return false;
+            }
         }
 
         // 基本和了形チェック（簡易版）
         function checkClientBasicWin(tiles, melds) {
+            console.log('🔍 checkClientBasicWin tiles:', tiles);
+            
             // 手牌をソート
-            const sortedTiles = [...tiles].sort((a, b) => {
-                if (a.suit !== b.suit) return a.suit.localeCompare(b.suit);
-                return a.rank - b.rank;
+            const sortedTiles = [...tiles].filter(tile => tile).sort((a, b) => {
+                if (!a || !b) return 0;
+                
+                // suitがundefinedの場合の安全な処理
+                const aSuit = a.suit || '';
+                const bSuit = b.suit || '';
+                
+                if (aSuit !== bSuit) return aSuit.localeCompare(bSuit);
+                const aRank = a.rank || a.number || 0;
+                const bRank = b.rank || b.number || 0;
+                return aRank - bRank;
             });
             
             // 再帰的に面子を取り除いて雀頭が残るかチェック
@@ -2320,7 +3513,7 @@
             if (tiles.length < 2) return false;
             
             // 雀頭を探す
-            if (tiles.length >= 2 && tiles[0].suit === tiles[1].suit && tiles[0].rank === tiles[1].rank) {
+            if (tiles.length >= 2 && tiles[0] && tiles[1] && tiles[0].suit === tiles[1].suit && tiles[0].rank === tiles[1].rank) {
                 const remaining = tiles.slice(2);
                 if (remaining.length === 0) return true; // 雀頭のみで終了
                 
@@ -2330,7 +3523,7 @@
             
             // 先頭から面子を作って再帰
             // 刻子チェック
-            if (tiles.length >= 3 && 
+            if (tiles.length >= 3 && tiles[0] && tiles[1] && tiles[2] &&
                 tiles[0].suit === tiles[1].suit && tiles[0].rank === tiles[1].rank &&
                 tiles[1].suit === tiles[2].suit && tiles[1].rank === tiles[2].rank) {
                 const remaining = tiles.slice(3);
@@ -2338,10 +3531,11 @@
             }
             
             // 順子チェック（数牌のみ）
-            if (tiles[0].suit !== 'honors' && tiles.length >= 3) {
+            if (tiles[0] && tiles[0].suit !== 'honors' && tiles.length >= 3) {
                 const tile1 = tiles[0];
-                const tile2Index = tiles.findIndex(t => t.suit === tile1.suit && t.rank === tile1.rank + 1);
-                const tile3Index = tiles.findIndex(t => t.suit === tile1.suit && t.rank === tile1.rank + 2);
+                const tile1Rank = tile1.rank || tile1.number || 0;
+                const tile2Index = tiles.findIndex(t => t && t.suit === tile1.suit && (t.rank || t.number || 0) === tile1Rank + 1);
+                const tile3Index = tiles.findIndex(t => t && t.suit === tile1.suit && (t.rank || t.number || 0) === tile1Rank + 2);
                 
                 if (tile2Index !== -1 && tile3Index !== -1) {
                     const remaining = [...tiles];
@@ -2362,17 +3556,18 @@
             if (tiles.length % 3 !== 0) return false;
             
             // 刻子チェック
-            if (tiles.length >= 3 && 
+            if (tiles.length >= 3 && tiles[0] && tiles[1] && tiles[2] &&
                 tiles[0].suit === tiles[1].suit && tiles[0].rank === tiles[1].rank &&
                 tiles[1].suit === tiles[2].suit && tiles[1].rank === tiles[2].rank) {
                 return findAllMentsus(tiles.slice(3));
             }
             
             // 順子チェック
-            if (tiles[0].suit !== 'honors' && tiles.length >= 3) {
+            if (tiles[0] && tiles[0].suit !== 'honors' && tiles.length >= 3) {
                 const tile1 = tiles[0];
-                const tile2Index = tiles.findIndex(t => t.suit === tile1.suit && t.rank === tile1.rank + 1);
-                const tile3Index = tiles.findIndex(t => t.suit === tile1.suit && t.rank === tile1.rank + 2);
+                const tile1Rank = tile1.rank || tile1.number || 0;
+                const tile2Index = tiles.findIndex(t => t && t.suit === tile1.suit && (t.rank || t.number || 0) === tile1Rank + 1);
+                const tile3Index = tiles.findIndex(t => t && t.suit === tile1.suit && (t.rank || t.number || 0) === tile1Rank + 2);
                 
                 if (tile2Index !== -1 && tile3Index !== -1) {
                     const remaining = [...tiles];
@@ -2393,7 +3588,9 @@
             
             const tileCounts = {};
             for (const tile of tiles) {
-                const key = `${tile.suit}_${tile.rank}`;
+                if (!tile) continue;
+                const rank = tile.rank || tile.number || 0;
+                const key = `${tile.suit}_${rank}`;
                 tileCounts[key] = (tileCounts[key] || 0) + 1;
             }
             
@@ -2637,6 +3834,438 @@
         }
 
         // カン
+        // チー実行（改善版）
+        async function callChi() {
+            if (!gameState || !lastDiscardedTile) {
+                showNotification('チーできません', 'error');
+                return;
+            }
+            
+            try {
+                const myTiles = gameState.players[0].hand.tiles;
+                const discardedTile = lastDiscardedTile;
+                
+                // チー可能な組み合わせを検索
+                const chiCombinations = findChiCombinations(myTiles, discardedTile);
+                
+                if (chiCombinations.length === 0) {
+                    showNotification('チーできる組み合わせがありません', 'error');
+                    return;
+                }
+                
+                if (chiCombinations.length === 1) {
+                    // 1つだけの場合は直接実行
+                    executeChiAction(chiCombinations[0], discardedTile);
+                } else {
+                    // 複数の場合は選択UIを表示
+                    showChiSelectionUI(chiCombinations, discardedTile);
+                }
+            } catch (error) {
+                console.error('Chi error:', error);
+                showNotification('エラーが発生しました', 'error');
+            }
+        }
+        
+        // ポン実行（改善版）
+        async function callPon() {
+            if (!gameState || !lastDiscardedTile) {
+                showNotification('ポンできません', 'error');
+                return;
+            }
+            
+            try {
+                const myTiles = gameState.players[0].hand.tiles;
+                const discardedTile = lastDiscardedTile;
+                
+                // ポン可能かチェック
+                const ponTiles = findPonTiles(myTiles, discardedTile);
+                
+                if (ponTiles.length < 2) {
+                    showNotification('ポンできる牌がありません', 'error');
+                    return;
+                }
+                
+                // ポンを実行
+                executePonAction(ponTiles, discardedTile);
+            } catch (error) {
+                console.error('Pon error:', error);
+                showNotification('エラーが発生しました', 'error');
+            }
+        }
+        
+        // メルド選択とアクションの統合関数
+        async function callMeld() {
+            if (!gameState || !lastDiscardedTile) {
+                showNotification('メルドできません', 'error');
+                return;
+            }
+            
+            const myTiles = gameState.players[0].hand.tiles;
+            const discardedTile = lastDiscardedTile;
+            
+            // 全ての可能なメルドを検索
+            const chiCombinations = findChiCombinations(myTiles, discardedTile);
+            const ponTiles = findPonTiles(myTiles, discardedTile);
+            const kanTiles = findKanTiles(myTiles, discardedTile);
+            
+            const allOptions = [];
+            
+            // チー選択肢を追加
+            chiCombinations.forEach((combo, index) => {
+                allOptions.push({
+                    type: 'chi',
+                    displayName: `チー: ${combo.map(t => getTileDisplayName(t)).join('')}`,
+                    tiles: combo,
+                    discardedTile: discardedTile
+                });
+            });
+            
+            // ポン選択肢を追加
+            if (ponTiles.length >= 2) {
+                allOptions.push({
+                    type: 'pon',
+                    displayName: `ポン: ${getTileDisplayName(discardedTile)}${getTileDisplayName(discardedTile)}${getTileDisplayName(discardedTile)}`,
+                    tiles: ponTiles,
+                    discardedTile: discardedTile
+                });
+            }
+            
+            // カン選択肢を追加
+            if (kanTiles.length >= 3) {
+                allOptions.push({
+                    type: 'kan',
+                    displayName: `カン: ${getTileDisplayName(discardedTile)}${getTileDisplayName(discardedTile)}${getTileDisplayName(discardedTile)}${getTileDisplayName(discardedTile)}`,
+                    tiles: kanTiles,
+                    discardedTile: discardedTile
+                });
+            }
+            
+            if (allOptions.length === 0) {
+                showNotification('メルドできません', 'error');
+                return;
+            }
+            
+            if (allOptions.length === 1) {
+                // 1つだけの場合は直接実行
+                executeMeldAction(allOptions[0]);
+            } else {
+                // 複数の場合は選択UIを表示
+                showMeldSelectionUI(allOptions);
+            }
+        }
+        
+        // チー組み合わせ検索
+        function findChiCombinations(tiles, discardedTile) {
+            if (discardedTile.honor) return []; // 字牌はチーできない
+            
+            const combinations = [];
+            const rank = discardedTile.rank;
+            const suit = discardedTile.suit;
+            
+            // ABC型（discardedTileがC）
+            if (rank >= 3) {
+                const needed = [
+                    { suit: suit, rank: rank - 2 },
+                    { suit: suit, rank: rank - 1 }
+                ];
+                const found = findTilesInHand(tiles, needed);
+                if (found.length === 2) {
+                    combinations.push([...found, discardedTile]);
+                }
+            }
+            
+            // ABC型（discardedTileがB）
+            if (rank >= 2 && rank <= 8) {
+                const needed = [
+                    { suit: suit, rank: rank - 1 },
+                    { suit: suit, rank: rank + 1 }
+                ];
+                const found = findTilesInHand(tiles, needed);
+                if (found.length === 2) {
+                    combinations.push([found[0], discardedTile, found[1]]);
+                }
+            }
+            
+            // ABC型（discardedTileがA）
+            if (rank <= 7) {
+                const needed = [
+                    { suit: suit, rank: rank + 1 },
+                    { suit: suit, rank: rank + 2 }
+                ];
+                const found = findTilesInHand(tiles, needed);
+                if (found.length === 2) {
+                    combinations.push([discardedTile, ...found]);
+                }
+            }
+            
+            return combinations;
+        }
+        
+        // ポン可能牌検索
+        function findPonTiles(tiles, discardedTile) {
+            const matchingTiles = [];
+            for (const tile of tiles) {
+                if (isSameTile(tile, discardedTile)) {
+                    matchingTiles.push(tile);
+                    if (matchingTiles.length >= 2) break;
+                }
+            }
+            return matchingTiles;
+        }
+        
+        // カン可能牌検索
+        function findKanTiles(tiles, discardedTile) {
+            const matchingTiles = [];
+            for (const tile of tiles) {
+                if (isSameTile(tile, discardedTile)) {
+                    matchingTiles.push(tile);
+                    if (matchingTiles.length >= 3) break;
+                }
+            }
+            return matchingTiles;
+        }
+        
+        // 手牌から必要な牌を検索
+        function findTilesInHand(tiles, needed) {
+            const found = [];
+            const usedIndices = [];
+            
+            for (const needTile of needed) {
+                let foundIndex = -1;
+                for (let i = 0; i < tiles.length; i++) {
+                    if (usedIndices.includes(i)) continue;
+                    if (isSameTile(tiles[i], needTile)) {
+                        foundIndex = i;
+                        break;
+                    }
+                }
+                if (foundIndex !== -1) {
+                    found.push(tiles[foundIndex]);
+                    usedIndices.push(foundIndex);
+                } else {
+                    return []; // 必要な牌が見つからない
+                }
+            }
+            
+            return found;
+        }
+        
+        // メルド選択UI表示
+        function showMeldSelectionUI(options) {
+            // 既存の選択UIがあれば削除
+            const existingUI = document.querySelector('.meld-selection-modal');
+            if (existingUI) {
+                existingUI.remove();
+            }
+            
+            const modal = document.createElement('div');
+            modal.className = 'meld-selection-modal';
+            modal.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0, 0, 0, 0.95);
+                border: 2px solid #ffc107;
+                border-radius: 10px;
+                padding: 20px;
+                z-index: 10000;
+                color: white;
+                font-family: 'Noto Sans JP', sans-serif;
+                max-width: 500px;
+                width: 90%;
+            `;
+            
+            const title = document.createElement('h3');
+            title.textContent = 'メルド選択';
+            title.style.cssText = `
+                margin: 0 0 15px 0;
+                color: #ffc107;
+                text-align: center;
+            `;
+            
+            const optionContainer = document.createElement('div');
+            optionContainer.style.cssText = `
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            `;
+            
+            options.forEach((option, index) => {
+                const button = document.createElement('button');
+                button.textContent = option.displayName;
+                button.style.cssText = `
+                    padding: 12px 20px;
+                    background: linear-gradient(45deg, #007bff, #0056b3);
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    font-size: 16px;
+                    transition: all 0.3s ease;
+                `;
+                
+                button.addEventListener('mouseenter', () => {
+                    button.style.background = 'linear-gradient(45deg, #0056b3, #003d82)';
+                    button.style.transform = 'scale(1.05)';
+                });
+                
+                button.addEventListener('mouseleave', () => {
+                    button.style.background = 'linear-gradient(45deg, #007bff, #0056b3)';
+                    button.style.transform = 'scale(1)';
+                });
+                
+                button.addEventListener('click', () => {
+                    modal.remove();
+                    executeMeldAction(option);
+                });
+                
+                optionContainer.appendChild(button);
+            });
+            
+            // キャンセルボタン
+            const cancelButton = document.createElement('button');
+            cancelButton.textContent = 'キャンセル';
+            cancelButton.style.cssText = `
+                padding: 10px 20px;
+                background: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                margin-top: 10px;
+            `;
+            
+            cancelButton.addEventListener('click', () => {
+                modal.remove();
+            });
+            
+            modal.appendChild(title);
+            modal.appendChild(optionContainer);
+            modal.appendChild(cancelButton);
+            document.body.appendChild(modal);
+            
+            // 5秒後に自動削除
+            setTimeout(() => {
+                if (document.body.contains(modal)) {
+                    modal.remove();
+                }
+            }, 5000);
+        }
+        
+        // メルドアクション実行
+        function executeMeldAction(option) {
+            switch (option.type) {
+                case 'chi':
+                    executeChiAction(option.tiles, option.discardedTile);
+                    break;
+                case 'pon':
+                    executePonAction(option.tiles, option.discardedTile);
+                    break;
+                case 'kan':
+                    executeKanAction(option.tiles, option.discardedTile);
+                    break;
+                default:
+                    console.error('Unknown meld type:', option.type);
+            }
+        }
+        
+        // チーアクション実行
+        function executeChiAction(tiles, discardedTile) {
+            const meld = {
+                id: `chi_${Date.now()}_player0`,
+                type: 'chi',
+                tiles: tiles,
+                fromPlayer: lastDiscardedPlayer,
+                isConcealed: false,
+                calledTile: discardedTile
+            };
+            
+            console.log('🎯 チーアクション送信');
+            socket.emit('playerAction', {
+                type: 'chi',
+                playerId: 'player_0',
+                meld: meld,
+                tile: discardedTile,
+                priority: 1,
+                timestamp: Date.now()
+            });
+            
+            soundManager.playSound('meld');
+        }
+        
+        // ポンアクション実行
+        function executePonAction(tiles, discardedTile) {
+            const meld = {
+                id: `pon_${Date.now()}_player0`,
+                type: 'pon',
+                tiles: [...tiles, discardedTile],
+                fromPlayer: lastDiscardedPlayer,
+                isConcealed: false,
+                calledTile: discardedTile
+            };
+            
+            console.log('🎯 ポンアクション送信');
+            socket.emit('playerAction', {
+                type: 'pon',
+                playerId: 'player_0',
+                meld: meld,
+                tile: discardedTile,
+                priority: 2,
+                timestamp: Date.now()
+            });
+            
+            soundManager.playSound('meld');
+        }
+        
+        // カンアクション実行
+        function executeKanAction(tiles, discardedTile) {
+            const meld = {
+                id: `kan_${Date.now()}_player0`,
+                type: 'kan',
+                tiles: [...tiles, discardedTile],
+                fromPlayer: lastDiscardedPlayer,
+                isConcealed: false,
+                calledTile: discardedTile
+            };
+            
+            console.log('🎯 カンアクション送信');
+            socket.emit('playerAction', {
+                type: 'kan',
+                playerId: 'player_0',
+                meld: meld,
+                tile: discardedTile,
+                priority: 3,
+                timestamp: Date.now()
+            });
+            
+            soundManager.playSound('meld');
+        }
+        
+        // 牌の表示名を取得
+        function getTileDisplayName(tile) {
+            if (tile.honor) {
+                const honorNames = {
+                    'east': '東', 'south': '南', 'west': '西', 'north': '北',
+                    'white': '白', 'green': '發', 'red': '中'
+                };
+                return honorNames[tile.honor] || tile.honor;
+            } else {
+                const suitNames = { 'man': 'm', 'pin': 'p', 'sou': 's' };
+                return `${tile.rank}${suitNames[tile.suit] || tile.suit}`;
+            }
+        }
+        
+        // 牌が同じかチェック
+        function isSameTile(tile1, tile2) {
+            if (tile1.honor && tile2.honor) {
+                return tile1.honor === tile2.honor;
+            } else if (!tile1.honor && !tile2.honor) {
+                return tile1.suit === tile2.suit && tile1.rank === tile2.rank;
+            }
+            return false;
+        }
+
         async function callKan() {
             if (!gameState) {
                 showNotification('カンできません', 'error');
@@ -2664,6 +4293,25 @@
                     }
                 }
                 
+                // 加槓の場合（既存のポンに手牌の同じ牌を追加）
+                if (kanTiles.length === 0) {
+                    const myMelds = gameState.players[0].hand.melds || [];
+                    for (const meld of myMelds) {
+                        if (meld.type === 'pon') {
+                            const meldTile = meld.tiles[0]; // ポンの牌
+                            for (const handTile of myTiles) {
+                                if (isSameTile(handTile, meldTile)) {
+                                    kanTiles = [...meld.tiles, handTile];
+                                    kanType = 'kakan'; // 加槓
+                                    console.log('🔍 加槓可能:', kanTiles);
+                                    break;
+                                }
+                            }
+                            if (kanTiles.length > 0) break;
+                        }
+                    }
+                }
+
                 // 暗槓の場合（手牌4枚）
                 if (kanTiles.length === 0) {
                     const tileCounts = {};
@@ -2877,7 +4525,7 @@
                     tileElement.classList.add('called');
                 }
                 
-                tileElement.textContent = tile.displayName || tile.unicode;
+                tileElement.textContent = getTileDisplayName(tile);
                 meldGroup.appendChild(tileElement);
             });
             
@@ -3259,6 +4907,107 @@
             window.lastDiscardCounts = [...currentDiscardCounts];
         }
 
+        // 点数計算テスト
+        function testScoreCalculation() {
+            console.log('💰 [点数計算テスト] 開始');
+            
+            const testCases = [
+                {
+                    name: 'タンヤオのみ（子ツモ）',
+                    yaku: [{ name: 'タンヤオ', han: 1, isYakuman: false }],
+                    fu: 30,
+                    isParent: false,
+                    isTsumo: true
+                },
+                {
+                    name: 'リーチ・タンヤオ（子ロン）',
+                    yaku: [
+                        { name: 'リーチ', han: 1, isYakuman: false },
+                        { name: 'タンヤオ', han: 1, isYakuman: false }
+                    ],
+                    fu: 30,
+                    isParent: false,
+                    isTsumo: false
+                },
+                {
+                    name: '満貫（子ツモ）',
+                    yaku: [
+                        { name: 'リーチ', han: 1, isYakuman: false },
+                        { name: 'タンヤオ', han: 1, isYakuman: false },
+                        { name: 'ドラ', han: 3, isYakuman: false }
+                    ],
+                    fu: 30,
+                    isParent: false,
+                    isTsumo: true
+                },
+                {
+                    name: '親満貫（ツモ）',
+                    yaku: [
+                        { name: 'リーチ', han: 1, isYakuman: false },
+                        { name: 'ドラ', han: 4, isYakuman: false }
+                    ],
+                    fu: 30,
+                    isParent: true,
+                    isTsumo: true
+                }
+            ];
+            
+            testCases.forEach(testCase => {
+                console.log(`\n💰 テストケース: ${testCase.name}`);
+                console.log(`   役: ${testCase.yaku.map(y => `${y.name}(${y.han}翻)`).join(', ')}`);
+                console.log(`   ${testCase.fu}符 ${testCase.isParent ? '親' : '子'} ${testCase.isTsumo ? 'ツモ' : 'ロン'}`);
+                
+                const totalHan = testCase.yaku.reduce((sum, y) => sum + y.han, 0);
+                console.log(`   合計翻数: ${totalHan}翻`);
+                
+                const expectedScore = calculateExpectedScore(totalHan, testCase.fu, testCase.isParent, testCase.isTsumo);
+                console.log(`   期待点数: ${expectedScore}点`);
+            });
+            
+            showNotification('点数計算テストをコンソールで確認してください', 'info');
+        }
+        
+        // 期待点数計算（検証用）
+        function calculateExpectedScore(han, fu, isParent, isTsumo) {
+            let baseScore;
+            
+            // 満貫以上判定
+            if (han >= 5 || (han >= 4 && fu >= 40) || (han >= 3 && fu >= 70)) {
+                baseScore = 2000; // 満貫
+            } else if (han >= 6) {
+                baseScore = 3000; // 跳満
+            } else if (han >= 8) {
+                baseScore = 4000; // 倍満
+            } else if (han >= 11) {
+                baseScore = 6000; // 三倍満
+            } else if (han >= 13) {
+                baseScore = 8000; // 数え役満
+            } else {
+                baseScore = fu * Math.pow(2, han + 2);
+            }
+            
+            // 親補正
+            if (isParent) {
+                baseScore = Math.floor(baseScore * 1.5);
+            }
+            
+            // ツモ/ロン補正（得点計算）
+            if (isTsumo) {
+                if (isParent) {
+                    // 親ツモ：子が全額の1/3ずつ → 3人分合計
+                    return Math.ceil(baseScore / 3 / 100) * 300;
+                } else {
+                    // 子ツモ：親が半額、他の子が1/4ずつ → 合計
+                    const parentPay = Math.ceil(baseScore / 2 / 100) * 100;
+                    const childPay = Math.ceil(baseScore / 4 / 100) * 200;
+                    return parentPay + childPay;
+                }
+            } else {
+                // ロン：放銃者が全額支払い
+                return Math.ceil(baseScore / 100) * 100;
+            }
+        }
+
         // 役判定テスト機能
         function testYakuAnalysis() {
             console.log('🎰 役判定テスト開始');
@@ -3343,57 +5092,518 @@
             console.log(`  ❌ 和了形ではありません`);
         }
         
-        // 役のシミュレーション
+        // 役のシミュレーション（強化版）
         function simulateYaku(tiles, melds, playerIndex, formType) {
             console.log(`  📊 ${formType}の役分析:`);
             
-            const allTiles = [...tiles, ...melds.flatMap(m => m.tiles)];
-            const isMenzen = melds.every(m => m.type === 'ankan' || m.isConcealed);
+            // 手牌を強化版フォーマットに変換
+            const handForYaku = convertTilesToAdvancedFormat(tiles);
+            const meldsForYaku = convertMeldsToAdvancedFormat(melds);
             
-            // 基本役チェック
-            const yakuList = [];
+            // 強化版役計算を実行
+            const yaku = calculateAdvancedYaku(handForYaku, meldsForYaku);
             
-            // タンヤオ
-            if (allTiles.every(t => !t.honor && t.rank >= 2 && t.rank <= 8)) {
-                yakuList.push('タンヤオ(1翻)');
-            }
-            
-            // リーチ
-            if (gameState.players[playerIndex].hand.riichi && isMenzen) {
-                yakuList.push('リーチ(1翻)');
-            }
-            
-            // 役牌（簡易チェック）
-            const honors = ['white', 'green', 'red', 'east', 'south', 'west', 'north'];
-            honors.forEach(honor => {
-                const count = allTiles.filter(t => t.honor === honor).length;
-                if (count >= 3) {
-                    const names = {
-                        white: '白', green: '發', red: '中',
-                        east: '東', south: '南', west: '西', north: '北'
-                    };
-                    yakuList.push(`${names[honor]}(1翻)`);
-                }
-            });
-            
-            // 特殊形の役
-            if (formType === '七対子') {
-                yakuList.push('七対子(2翻)');
-            } else if (formType === '国士無双') {
-                yakuList.push('国士無双(役満)');
-            }
-            
-            if (yakuList.length > 0) {
-                console.log(`    役: ${yakuList.join(', ')}`);
-                const totalHan = yakuList.reduce((sum, yaku) => {
-                    if (yaku.includes('役満')) return sum + 13;
-                    const match = yaku.match(/(\d+)翻/);
-                    return sum + (match ? parseInt(match[1]) : 0);
-                }, 0);
+            if (yaku.length > 0) {
+                const yakuStrings = yaku.map(y => `${y.name}(${y.han >= 13 ? '役満' : y.han + '翻'})`);
+                console.log(`    役: ${yakuStrings.join(', ')}`);
+                const totalHan = yaku.reduce((sum, y) => sum + y.han, 0);
                 console.log(`    合計: ${totalHan >= 13 ? '役満' : totalHan + '翻'}`);
             } else {
                 console.log(`    役: なし（役なし）`);
             }
+        }
+        
+        // タイル形式変換関数
+        function convertTilesToAdvancedFormat(tiles) {
+            return tiles.map(tile => {
+                if (tile.honor) {
+                    const honorMap = {
+                        'white': 'haku', 'green': 'hatsu', 'red': 'chun',
+                        'east': 'east', 'south': 'south', 'west': 'west', 'north': 'north'
+                    };
+                    return { suit: 'honors', type: honorMap[tile.honor] };
+                } else {
+                    return { suit: tile.suit, rank: tile.rank };
+                }
+            });
+        }
+        
+        // メルド形式変換関数
+        function convertMeldsToAdvancedFormat(melds) {
+            return melds.map(meld => ({
+                type: meld.type,
+                tiles: convertTilesToAdvancedFormat(meld.tiles),
+                isConcealed: meld.isConcealed || false
+            }));
+        }
+        
+        // 強化版役計算メイン関数
+        function calculateAdvancedYaku(hand, meldData = []) {
+            const yaku = [];
+            
+            // グローバルな副露データを設定（一時的）
+            const originalMelds = typeof melds !== 'undefined' ? melds : [];
+            if (typeof melds === 'undefined') {
+                window.melds = meldData;
+            }
+            
+            try {
+                // 役満優先判定
+                if (checkKokushiAdvanced(hand)) {
+                    yaku.push({ name: '国士無双', han: 13 });
+                    return yaku;
+                }
+                if (checkSuuankouAdvanced(hand)) {
+                    yaku.push({ name: '四暗刻', han: 13 });
+                    return yaku;
+                }
+                if (checkDaisangenAdvanced(hand)) {
+                    yaku.push({ name: '大三元', han: 13 });
+                    return yaku;
+                }
+                if (checkTsuuiisouAdvanced(hand)) {
+                    yaku.push({ name: '字一色', han: 13 });
+                    return yaku;
+                }
+                if (checkChinroutouAdvanced(hand)) {
+                    yaku.push({ name: '清老頭', han: 13 });
+                    return yaku;
+                }
+                if (checkRyuuiisouAdvanced(hand)) {
+                    yaku.push({ name: '緑一色', han: 13 });
+                    return yaku;
+                }
+                if (checkChuurenAdvanced(hand)) {
+                    yaku.push({ name: '九蓮宝燈', han: 13 });
+                    return yaku;
+                }
+                if (checkSuukantsuAdvanced(hand)) {
+                    yaku.push({ name: '四槓子', han: 13 });
+                    return yaku;
+                }
+
+                // 特殊形判定
+                if (checkChiitoiAdvanced(hand)) {
+                    yaku.push({ name: '七対子', han: 2 });
+                    if (checkTanyaoAdvanced(hand)) yaku.push({ name: 'タンヤオ', han: 1 });
+                    if (checkChinitsuAdvanced(hand)) yaku.push({ name: '清一色', han: 6 });
+                    if (checkHonitsuAdvanced(hand)) yaku.push({ name: '混一色', han: 3 });
+                    return yaku;
+                }
+
+                // 通常役判定
+                if (checkTanyaoAdvanced(hand)) yaku.push({ name: 'タンヤオ', han: 1 });
+                
+                // 一盃口・二盃口
+                if (checkRyanpeikouAdvanced(hand)) {
+                    yaku.push({ name: '二盃口', han: 3 });
+                } else if (checkIipeikouAdvanced(hand)) {
+                    yaku.push({ name: '一盃口', han: 1 });
+                }
+                
+                // ピンフ
+                if (checkPinfuAdvanced(hand)) {
+                    yaku.push({ name: 'ピンフ', han: 1 });
+                }
+                
+                // 役牌
+                const yakuhaiDetails = getYakuhaiDetailsAdvanced(hand, meldData);
+                yakuhaiDetails.forEach(yakuhai => {
+                    yaku.push(yakuhai);
+                });
+                
+                // その他の役
+                if (checkToitoiAdvanced(hand)) yaku.push({ name: '対々和', han: 2 });
+                if (checkSanankouAdvanced(hand)) yaku.push({ name: '三暗刻', han: 2 });
+                if (checkSanshokuAdvanced(hand)) yaku.push({ name: '三色同順', han: 2 });
+                if (checkIttsuAdvanced(hand)) yaku.push({ name: '一気通貫', han: 2 });
+                if (checkChantaAdvanced(hand)) yaku.push({ name: '混全帯么九', han: 2 });
+                if (checkJunchanAdvanced(hand)) yaku.push({ name: '純全帯么九', han: 3 });
+                if (checkHonroutouAdvanced(hand)) yaku.push({ name: '混老頭', han: 2 });
+                if (checkShousangenAdvanced(hand)) yaku.push({ name: '小三元', han: 2 });
+                if (checkHonitsuAdvanced(hand)) yaku.push({ name: '混一色', han: 3 });
+                if (checkChinitsuAdvanced(hand)) yaku.push({ name: '清一色', han: 6 });
+                
+                return yaku;
+            } finally {
+                // グローバル状態を復元
+                if (typeof melds !== 'undefined' && originalMelds !== melds) {
+                    window.melds = originalMelds;
+                }
+            }
+        }
+        
+        // タイルカウント取得（強化版）
+        function getTileCountsAdvanced(hand) {
+            const counts = {};
+            hand.forEach(tile => {
+                const key = getTileKeyAdvanced(tile);
+                counts[key] = (counts[key] || 0) + 1;
+            });
+            return counts;
+        }
+        
+        // タイルキー取得（強化版）
+        function getTileKeyAdvanced(tile) {
+            if (tile.suit === 'honors') {
+                return `honors_${tile.type}`;
+            } else {
+                return `${tile.suit}_${tile.rank}`;
+            }
+        }
+        
+        // === 役満判定関数群 ===
+        
+        function checkKokushiAdvanced(hand) {
+            if (hand.length !== 14) return false;
+            const yaochuTiles = [
+                'man_1', 'man_9', 'pin_1', 'pin_9', 'sou_1', 'sou_9',
+                'honors_east', 'honors_south', 'honors_west', 'honors_north',
+                'honors_haku', 'honors_hatsu', 'honors_chun'
+            ];
+            
+            const counts = getTileCountsAdvanced(hand);
+            let pairFound = false;
+            
+            // 各么九牌が1枚以上あるかチェック
+            for (const yaochu of yaochuTiles) {
+                if (!counts[yaochu]) return false;
+                if (counts[yaochu] === 2) {
+                    if (pairFound) return false; // 雀頭は1つのみ
+                    pairFound = true;
+                } else if (counts[yaochu] !== 1) {
+                    return false;
+                }
+            }
+            
+            return pairFound;
+        }
+        
+        function checkSuuankouAdvanced(hand) {
+            const counts = getTileCountsAdvanced(hand);
+            const triplets = Object.values(counts).filter(count => count >= 3).length;
+            const pairs = Object.values(counts).filter(count => count === 2).length;
+            return triplets === 4 && pairs === 1;
+        }
+        
+        function checkDaisangenAdvanced(hand) {
+            const dragons = ['honors_haku', 'honors_hatsu', 'honors_chun'];
+            const counts = getTileCountsAdvanced(hand);
+            return dragons.every(dragon => counts[dragon] >= 3);
+        }
+        
+        function checkTsuuiisouAdvanced(hand) {
+            return hand.every(tile => tile.suit === 'honors');
+        }
+        
+        function checkChinroutouAdvanced(hand) {
+            return hand.every(tile => {
+                if (tile.suit === 'honors') return false;
+                return tile.rank === 1 || tile.rank === 9;
+            });
+        }
+        
+        function checkRyuuiisouAdvanced(hand) {
+            const greenTiles = ['sou_2', 'sou_3', 'sou_4', 'sou_6', 'sou_8', 'honors_hatsu'];
+            return hand.every(tile => {
+                const key = getTileKeyAdvanced(tile);
+                return greenTiles.includes(key);
+            });
+        }
+        
+        function checkChuurenAdvanced(hand) {
+            const suits = ['man', 'pin', 'sou'];
+            return suits.some(suit => {
+                const suitTiles = hand.filter(tile => tile.suit === suit);
+                if (suitTiles.length !== 14) return false;
+                
+                const counts = {};
+                suitTiles.forEach(tile => {
+                    counts[tile.rank] = (counts[tile.rank] || 0) + 1;
+                });
+                
+                return counts[1] >= 3 && counts[9] >= 3 && 
+                       [2,3,4,5,6,7,8].every(rank => counts[rank] >= 1);
+            });
+        }
+        
+        function checkSuukantsuAdvanced(hand) {
+            const counts = getTileCountsAdvanced(hand);
+            const quads = Object.values(counts).filter(count => count === 4).length;
+            return quads === 4;
+        }
+        
+        // === 特殊形判定関数群 ===
+        
+        function checkChiitoiAdvanced(hand) {
+            if (hand.length !== 14) return false;
+            const counts = getTileCountsAdvanced(hand);
+            const values = Object.values(counts);
+            return values.length === 7 && values.every(count => count === 2);
+        }
+        
+        // === 通常役判定関数群 ===
+        
+        function checkTanyaoAdvanced(hand) {
+            return hand.every(tile => {
+                if (tile.suit === 'honors') return false;
+                return tile.rank >= 2 && tile.rank <= 8;
+            });
+        }
+        
+        function checkPinfuAdvanced(hand) {
+            if (checkChiitoiAdvanced(hand)) return false;
+            
+            const structure = analyzeHandStructureAdvanced(hand);
+            if (!structure || !structure.isComplete) return false;
+            
+            // 4つの順子と1つの雀頭
+            if (structure.sequences.length !== 4) return false;
+            if (structure.triplets.length > 0 || structure.quads.length > 0) return false;
+            if (structure.pairs.length !== 1) return false;
+            
+            // 雀頭が役牌でないこと
+            const pairKey = structure.pairs[0];
+            if (typeof pairKey === 'string' && pairKey.startsWith('honors')) return false;
+            
+            return true;
+        }
+        
+        function checkIipeikouAdvanced(hand) {
+            if (checkChiitoiAdvanced(hand)) return false;
+            
+            const structure = analyzeHandStructureAdvanced(hand);
+            if (!structure || !structure.isComplete) return false;
+            if (structure.sequences.length < 2) return false;
+            
+            // 順子を正規化して比較
+            const sequencePatterns = structure.sequences.map(seq => {
+                return seq.sort().join(',');
+            });
+            
+            const patternCounts = {};
+            sequencePatterns.forEach(pattern => {
+                patternCounts[pattern] = (patternCounts[pattern] || 0) + 1;
+            });
+            
+            // 同じ順子が2つ以上あるかチェック
+            return Object.values(patternCounts).some(count => count >= 2);
+        }
+        
+        function checkRyanpeikouAdvanced(hand) {
+            if (checkChiitoiAdvanced(hand)) return false;
+            
+            const groups = analyzeHandStructureAdvanced(hand);
+            if (!groups) return false;
+            
+            const sequences = groups.sequences.map(seq => seq.sort().join(''));
+            const counts = {};
+            
+            sequences.forEach(seq => {
+                counts[seq] = (counts[seq] || 0) + 1;
+            });
+            
+            const pairs = Object.values(counts).filter(count => count >= 2);
+            return pairs.length >= 2;
+        }
+        
+        function getYakuhaiDetailsAdvanced(hand, meldData = []) {
+            const counts = getTileCountsAdvanced(hand);
+            const yakuhaiList = [];
+            
+            console.log('🔍 役牌判定:', {
+                hand: hand,
+                meldData: meldData,
+                counts: counts
+            });
+            
+            // 副露からもカウント追加
+            meldData.forEach(meld => {
+                if (meld.type === 'pon' || meld.type === 'kan' || meld.type === 'ankan') {
+                    const key = getTileKeyAdvanced(meld.tiles[0]);
+                    const meldCount = meld.tiles.length;
+                    counts[key] = (counts[key] || 0) + meldCount;
+                    console.log('🔍 メルドから役牌カウント追加:', {
+                        key: key,
+                        meldCount: meldCount,
+                        newCount: counts[key]
+                    });
+                }
+            });
+            
+            // 三元牌チェック
+            const dragonNames = { haku: '白', hatsu: '發', chun: '中' };
+            Object.entries(dragonNames).forEach(([type, name]) => {
+                const key = `honors_${type}`;
+                if (counts[key] >= 3) {
+                    yakuhaiList.push({ name: `役牌(${name})`, han: 1, type: 'dragon' });
+                }
+            });
+            
+            // 場風チェック
+            const gameWindKey = `honors_${gameSettings.gameWind}`;
+            if (counts[gameWindKey] >= 3) {
+                const windNames = { east: '東', south: '南', west: '西', north: '北' };
+                yakuhaiList.push({ 
+                    name: `場風(${windNames[gameSettings.gameWind]})`, 
+                    han: 1, 
+                    type: 'gameWind' 
+                });
+            }
+            
+            // 自風チェック
+            const playerWindKey = `honors_${gameSettings.playerWind}`;
+            if (counts[playerWindKey] >= 3) {
+                const windNames = { east: '東', south: '南', west: '西', north: '北' };
+                yakuhaiList.push({ 
+                    name: `自風(${windNames[gameSettings.playerWind]})`, 
+                    han: 1, 
+                    type: 'playerWind' 
+                });
+            }
+            
+            return yakuhaiList;
+        }
+        
+        function checkToitoiAdvanced(hand) {
+            if (checkChiitoiAdvanced(hand)) return false;
+            
+            const counts = getTileCountsAdvanced(hand);
+            const triplets = Object.values(counts).filter(count => count >= 3).length;
+            const pairs = Object.values(counts).filter(count => count === 2).length;
+            return triplets === 4 && pairs === 1;
+        }
+        
+        function checkSanankouAdvanced(hand) {
+            const counts = getTileCountsAdvanced(hand);
+            const triplets = Object.values(counts).filter(count => count >= 3).length;
+            return triplets >= 3;
+        }
+        
+        function checkSanshokuAdvanced(hand) {
+            if (checkChiitoiAdvanced(hand)) return false;
+            
+            // 三色同順の判定：3つの色で同じ順子
+            for (let rank = 1; rank <= 7; rank++) {
+                const manSeq = [`man_${rank}`, `man_${rank+1}`, `man_${rank+2}`];
+                const pinSeq = [`pin_${rank}`, `pin_${rank+1}`, `pin_${rank+2}`];
+                const souSeq = [`sou_${rank}`, `sou_${rank+1}`, `sou_${rank+2}`];
+                
+                const counts = getTileCountsAdvanced(hand);
+                
+                if (manSeq.every(tile => counts[tile] >= 1) &&
+                    pinSeq.every(tile => counts[tile] >= 1) &&
+                    souSeq.every(tile => counts[tile] >= 1)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        
+        function checkIttsuAdvanced(hand) {
+            // 一気通貫：同一色で1-9の順子
+            const suits = ['man', 'pin', 'sou'];
+            return suits.some(suit => {
+                const seq1 = [`${suit}_1`, `${suit}_2`, `${suit}_3`];
+                const seq2 = [`${suit}_4`, `${suit}_5`, `${suit}_6`];
+                const seq3 = [`${suit}_7`, `${suit}_8`, `${suit}_9`];
+                
+                const counts = getTileCountsAdvanced(hand);
+                
+                return seq1.every(tile => counts[tile] >= 1) &&
+                       seq2.every(tile => counts[tile] >= 1) &&
+                       seq3.every(tile => counts[tile] >= 1);
+            });
+        }
+        
+        function checkChantaAdvanced(hand) {
+            if (checkChiitoiAdvanced(hand)) return false;
+            
+            // 混全帯么九：各メンツに端牌か字牌が含まれる
+            return hand.every(tile => {
+                if (tile.suit === 'honors') return true;
+                return tile.rank === 1 || tile.rank === 9;
+            });
+        }
+        
+        function checkJunchanAdvanced(hand) {
+            if (checkChiitoiAdvanced(hand)) return false;
+            
+            // 純全帯么九：各メンツに端牌（1,9）が含まれ、字牌なし
+            const hasHonors = hand.some(tile => tile.suit === 'honors');
+            if (hasHonors) return false;
+            
+            return hand.every(tile => tile.rank === 1 || tile.rank === 9);
+        }
+        
+        function checkHonroutouAdvanced(hand) {
+            // 混老頭：端牌と字牌のみ
+            return hand.every(tile => {
+                if (tile.suit === 'honors') return true;
+                return tile.rank === 1 || tile.rank === 9;
+            });
+        }
+        
+        function checkShousangenAdvanced(hand) {
+            const dragons = ['honors_haku', 'honors_hatsu', 'honors_chun'];
+            const counts = getTileCountsAdvanced(hand);
+            
+            let tripletCount = 0;
+            let pairCount = 0;
+            
+            dragons.forEach(dragon => {
+                if (counts[dragon] >= 3) tripletCount++;
+                if (counts[dragon] === 2) pairCount++;
+            });
+            
+            return tripletCount === 2 && pairCount === 1;
+        }
+        
+        function checkHonitsuAdvanced(hand) {
+            // 混一色：1つの数牌と字牌のみ
+            const suits = new Set(hand.map(tile => tile.suit));
+            const hasHonors = suits.has('honors');
+            const numberSuits = [...suits].filter(suit => suit !== 'honors');
+            
+            return hasHonors && numberSuits.length === 1;
+        }
+        
+        function checkChinitsuAdvanced(hand) {
+            // 清一色：1つの数牌のみ
+            const suits = new Set(hand.map(tile => tile.suit));
+            return suits.size === 1 && !suits.has('honors');
+        }
+        
+        // 手牌構造分析（簡易版）
+        function analyzeHandStructureAdvanced(hand) {
+            if (hand.length !== 14) return null;
+            
+            // 簡易実装：基本的な面子構成を判定
+            const counts = getTileCountsAdvanced(hand);
+            
+            let pairs = 0;
+            let triplets = 0;
+            let sequences = 0;
+            
+            // 対子と刻子をカウント
+            Object.values(counts).forEach(count => {
+                if (count === 2) pairs++;
+                else if (count >= 3) triplets++;
+            });
+            
+            // 順子の推定（簡易）
+            const remainingTiles = hand.length - (pairs * 2) - (triplets * 3);
+            sequences = Math.floor(remainingTiles / 3);
+            
+            const isComplete = (pairs === 1 && triplets + sequences === 4);
+            
+            return {
+                isComplete,
+                pairs: pairs > 0 ? ['pair'] : [],
+                triplets: Array(triplets).fill(['triplet']),
+                sequences: Array(sequences).fill(['sequence']),
+                quads: []
+            };
         }
         
         // 簡易シャンテン計算
@@ -3584,6 +5794,356 @@
             }, 3000);
         }
 
+        // 三家和用花火エフェクト
+        function createFireworks() {
+            const container = document.createElement('div');
+            container.className = 'fireworks-container';
+            container.style.position = 'fixed';
+            container.style.top = '0';
+            container.style.left = '0';
+            container.style.width = '100%';
+            container.style.height = '100%';
+            container.style.pointerEvents = 'none';
+            container.style.zIndex = '9999';
+            document.body.appendChild(container);
+            
+            const colors = ['#ff1744', '#ff9800', '#ffc107', '#4caf50', '#2196f3', '#9c27b0'];
+            
+            // 複数の花火を作成
+            for (let firework = 0; firework < 5; firework++) {
+                setTimeout(() => {
+                    const centerX = Math.random() * window.innerWidth;
+                    const centerY = Math.random() * (window.innerHeight * 0.6) + window.innerHeight * 0.2;
+                    
+                    // 花火の火花を作成
+                    for (let i = 0; i < 30; i++) {
+                        const spark = document.createElement('div');
+                        spark.style.position = 'absolute';
+                        spark.style.width = '4px';
+                        spark.style.height = '4px';
+                        spark.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                        spark.style.borderRadius = '50%';
+                        spark.style.left = centerX + 'px';
+                        spark.style.top = centerY + 'px';
+                        
+                        const angle = (i / 30) * 2 * Math.PI;
+                        const distance = 150 + Math.random() * 100;
+                        const endX = centerX + Math.cos(angle) * distance;
+                        const endY = centerY + Math.sin(angle) * distance;
+                        
+                        spark.style.transition = 'all 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+                        container.appendChild(spark);
+                        
+                        // アニメーション開始
+                        setTimeout(() => {
+                            spark.style.transform = `translate(${endX - centerX}px, ${endY - centerY}px)`;
+                            spark.style.opacity = '0';
+                        }, 10);
+                    }
+                }, firework * 400);
+            }
+            
+            // 4秒後にコンテナを削除
+            setTimeout(() => {
+                document.body.removeChild(container);
+            }, 4000);
+        }
+
+        // 流し満貫用波エフェクト
+        function createWaveEffect() {
+            const container = document.createElement('div');
+            container.className = 'wave-container';
+            container.style.position = 'fixed';
+            container.style.top = '0';
+            container.style.left = '0';
+            container.style.width = '100%';
+            container.style.height = '100%';
+            container.style.pointerEvents = 'none';
+            container.style.zIndex = '9999';
+            container.style.overflow = 'hidden';
+            document.body.appendChild(container);
+            
+            // 複数の波を作成
+            for (let i = 0; i < 3; i++) {
+                setTimeout(() => {
+                    const wave = document.createElement('div');
+                    wave.style.position = 'absolute';
+                    wave.style.bottom = '-50px';
+                    wave.style.left = '-50%';
+                    wave.style.width = '200%';
+                    wave.style.height = '200px';
+                    wave.style.background = `linear-gradient(135deg, rgba(76, 175, 80, 0.3), rgba(139, 195, 74, 0.3))`;
+                    wave.style.borderRadius = '50%';
+                    wave.style.transform = 'translateY(100%)';
+                    wave.style.transition = 'all 2s ease-out';
+                    container.appendChild(wave);
+                    
+                    // アニメーション開始
+                    setTimeout(() => {
+                        wave.style.transform = 'translateY(-100%)';
+                        wave.style.opacity = '0';
+                    }, 10);
+                }, i * 300);
+            }
+            
+            // 4秒後にコンテナを削除
+            setTimeout(() => {
+                document.body.removeChild(container);
+            }, 4000);
+        }
+
+        // テンパイ表示更新システム
+        function updateTenpaiDisplay(gameState) {
+            if (!gameState || !gameState.players) return;
+            
+            gameState.players.forEach((player, index) => {
+                const playerElement = document.querySelector(`#player${index}`);
+                if (!playerElement) return;
+                
+                // 既存のテンパイ表示を削除
+                const existingTenpai = playerElement.querySelector('.tenpai-indicator');
+                if (existingTenpai) {
+                    existingTenpai.remove();
+                }
+                
+                // テンパイ情報がある場合のみ表示
+                if (player.tenpaiInfo && player.tenpaiInfo.isTenpai) {
+                    const tenpaiIndicator = createTenpaiIndicator(player.tenpaiInfo, index);
+                    playerElement.appendChild(tenpaiIndicator);
+                }
+            });
+        }
+        
+        // テンパイインジケーター作成
+        function createTenpaiIndicator(tenpaiInfo, playerIndex) {
+            const indicator = document.createElement('div');
+            indicator.className = 'tenpai-indicator';
+            indicator.style.cssText = `
+                position: absolute;
+                top: 5px;
+                right: 5px;
+                background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+                color: white;
+                padding: 6px 12px;
+                border-radius: 16px;
+                font-size: 14px;
+                font-weight: bold;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+                border: 2px solid rgba(255,255,255,0.3);
+                z-index: 100;
+                animation: tenpai-pulse 2s infinite;
+                min-width: 60px;
+                text-align: center;
+            `;
+            
+            // テンパイ情報のテキスト作成
+            let text = 'テンパイ';
+            
+            // フリテンの場合は表示を変更
+            if (tenpaiInfo.isFuriten) {
+                text = 'フリテン';
+                indicator.style.background = 'linear-gradient(45deg, #666, #444)';
+            }
+            
+            // 待ちの種類表示（プレイヤー自身の場合のみ詳細表示）
+            if (playerIndex === 0 && tenpaiInfo.waitType) {
+                const waitTypeText = getWaitTypeDisplayName(tenpaiInfo.waitType);
+                text += ` (${waitTypeText})`;
+            }
+            
+            indicator.textContent = text;
+            
+            // 待ち牌表示（プレイヤー自身の場合のみ）- 正式版
+            if (playerIndex === 0 && tenpaiInfo.waitingTiles && tenpaiInfo.waitingTiles.length > 0) {
+                const waitingTilesDisplay = document.createElement('div');
+                waitingTilesDisplay.style.cssText = `
+                    margin-top: 4px;
+                    font-size: 12px;
+                    opacity: 1;
+                    background: rgba(0,0,0,0.7);
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    border: 1px solid rgba(255,215,0,0.3);
+                `;
+                
+                // 待ち牌のシンボル表示
+                const waitingSymbols = tenpaiInfo.waitingTiles
+                    .map(tile => getTileDisplaySymbol(tile))
+                    .join(' ');
+                
+                // 待ち枚数計算（実際の残り枚数を考慮）
+                const totalWaitingCount = calculateActualWaitingCount(tenpaiInfo.waitingTiles);
+                
+                waitingTilesDisplay.innerHTML = `
+                    <div style="color: #FFD700; font-weight: bold;">
+                        待ち: ${waitingSymbols}
+                    </div>
+                    <div style="font-size: 10px; color: #AAA;">
+                        ${tenpaiInfo.waitingTiles.length}種${totalWaitingCount}枚
+                    </div>
+                `;
+                indicator.appendChild(waitingTilesDisplay);
+            }
+            
+            return indicator;
+        }
+        
+        // 待ちタイプの表示名
+        function getWaitTypeDisplayName(waitType) {
+            const typeMap = {
+                'tanki': '単騎',
+                'ryanmen': '両面',
+                'kanchan': '嵌張',
+                'penchan': '辺張',
+                'shanpon': 'シャンポン',
+                'sanmenchan': '三面張',
+                'chiitoi': '七対子',
+                'kokushi': '国士無双',
+                'multiple': '多面待ち',
+                'none': 'なし'
+            };
+            return typeMap[waitType] || waitType;
+        }
+
+        // 牌表示用シンボル取得（正式版）
+        function getTileDisplaySymbol(tile) {
+            if (!tile) return '?';
+            
+            if (tile.suit === 'honors') {
+                const honorMap = {
+                    east: '🀀', south: '🀁', west: '🀂', north: '🀃',
+                    haku: '🀆', hatsu: '🀅', chun: '🀄'
+                };
+                return honorMap[tile.type] || tile.type;
+            } else {
+                // 数牌の場合は数字とスートシンボルを表示
+                const suitMap = {
+                    man: '🀇', pin: '🀙', sou: '🀐'
+                };
+                const baseSymbol = suitMap[tile.suit];
+                if (baseSymbol && tile.rank >= 1 && tile.rank <= 9) {
+                    // Unicodeの麻雀牌は連続した番号なので計算で求める
+                    const offset = tile.rank - 1;
+                    return String.fromCodePoint(baseSymbol.codePointAt(0) + offset);
+                }
+                return `${tile.rank}${tile.suit}`;
+            }
+        }
+
+        // 数字を漢字に変換
+        function numberToKanji(num) {
+            const kanjiNumbers = {
+                1: '一', 2: '二', 3: '三', 4: '四', 5: '五',
+                6: '六', 7: '七', 8: '八', 9: '九'
+            };
+            return kanjiNumbers[num] || num;
+        }
+
+        // 牌の表示名取得（縦書き対応）
+        function getTileDisplayName(tile) {
+            if (!tile) return '不明';
+            
+            try {
+                // 字牌（役牌・風牌）の処理
+                if (tile.suit === 'honors' || tile.honor) {
+                    const honorMap = {
+                        east: '東', south: '南', west: '西', north: '北',
+                        haku: '白', hatsu: '發', chun: '中',
+                        white: '白', green: '發', red: '中'  // 英語表記にも対応
+                    };
+                    const key = tile.type || tile.honor;
+                    return honorMap[key] || key;
+                }
+                
+                // 数牌（萬子・筒子・索子）の処理
+                if (tile.suit && (tile.rank || tile.number)) {
+                    const suitMap = {
+                        man: '萬', pin: '筒', sou: '索'
+                    };
+                    const kanjiNumber = numberToKanji(tile.rank || tile.number);
+                    const suitChar = suitMap[tile.suit] || tile.suit;
+                    return `${kanjiNumber}\n${suitChar}`;
+                }
+                
+                // フォールバック
+                return tile.displayName || tile.unicode || `${tile.suit}${tile.rank}` || '?';
+                
+            } catch (error) {
+                console.error('getTileDisplayName error:', error, tile);
+                return tile.displayName || tile.unicode || `${tile.suit}${tile.rank}` || '?';
+            }
+        }
+
+        // 牌の詳細表示名取得（従来版も残す）
+        function getTileDetailedName(tile) {
+            if (!tile) return '不明';
+            
+            if (tile.suit === 'honors') {
+                const honorMap = {
+                    east: '東', south: '南', west: '西', north: '北',
+                    haku: '白', hatsu: '發', chun: '中'
+                };
+                return honorMap[tile.type] || tile.type;
+            } else {
+                const suitMap = {
+                    man: '萬', pin: '筒', sou: '索'
+                };
+                return `${tile.rank}${suitMap[tile.suit] || tile.suit}`;
+            }
+        }
+
+        // 実際の待ち枚数計算（河や手牌を考慮）
+        function calculateActualWaitingCount(waitingTiles) {
+            if (!gameState || !gameState.discardPiles) {
+                // ゲーム状態が取得できない場合は簡易計算
+                return waitingTiles.length * 4;
+            }
+
+            let totalCount = 0;
+            
+            waitingTiles.forEach(waitTile => {
+                let availableCount = 4; // 各牌は最大4枚
+                
+                // 全プレイヤーの河をチェック
+                gameState.discardPiles.forEach(discardPile => {
+                    if (discardPile && Array.isArray(discardPile)) {
+                        discardPile.forEach(discardedTile => {
+                            if (tilesEqual(discardedTile, waitTile)) {
+                                availableCount--;
+                            }
+                        });
+                    }
+                });
+                
+                // 自分の手牌をチェック（既に持っている分を除外）
+                if (gameState.players && gameState.players[0] && gameState.players[0].hand) {
+                    const myTiles = gameState.players[0].hand.tiles || [];
+                    myTiles.forEach(myTile => {
+                        if (tilesEqual(myTile, waitTile)) {
+                            availableCount--;
+                        }
+                    });
+                }
+                
+                totalCount += Math.max(0, availableCount);
+            });
+            
+            return totalCount;
+        }
+
+        // 牌の比較関数
+        function tilesEqual(tile1, tile2) {
+            if (!tile1 || !tile2) return false;
+            
+            if (tile1.suit !== tile2.suit) return false;
+            
+            if (tile1.suit === 'honors') {
+                return tile1.type === tile2.type;
+            } else {
+                return tile1.rank === tile2.rank;
+            }
+        }
+
         // 背景フラッシュエフェクト
         function flashBackground(color, duration) {
             const flash = document.createElement('div');
@@ -3638,6 +6198,39 @@
                 tileElement.style.transform = 'translateY(0) scale(1)';
                 tileElement.style.opacity = '1';
             }, 400);
+        }
+
+        // リーチ表示更新関数
+        function updateRiichiDisplay(playerElement, player, playerIndex) {
+            // 既存のリーチ表示を削除
+            const existingRiichiIndicator = playerElement.querySelector('.riichi-indicator');
+            if (existingRiichiIndicator) {
+                existingRiichiIndicator.remove();
+            }
+            
+            // リーチ中の場合は表示を追加
+            if (player.hand && player.hand.riichi) {
+                const riichiIndicator = document.createElement('div');
+                riichiIndicator.className = 'riichi-indicator';
+                riichiIndicator.innerHTML = '🔥 リーチ';
+                riichiIndicator.style.cssText = `
+                    position: absolute;
+                    top: -15px;
+                    right: -15px;
+                    background: linear-gradient(135deg, #ff4444, #cc0000);
+                    color: white;
+                    padding: 5px 10px;
+                    border-radius: 15px;
+                    font-size: 0.8rem;
+                    font-weight: bold;
+                    border: 2px solid #fff;
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                    animation: riichiGlow 2s ease-in-out infinite;
+                    z-index: 100;
+                `;
+                playerElement.appendChild(riichiIndicator);
+                console.log(`🔥 リーチ表示追加: プレイヤー${playerIndex} (${player.name})`);
+            }
         }
 
         // キーボードショートカット

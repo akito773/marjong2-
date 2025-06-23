@@ -151,6 +151,7 @@
                     <button class="button" onclick="manualDraw()" id="drawBtn" disabled>🎯 ツモ</button>
                     <button class="button" onclick="executeAI()" id="aiBtn">🤖 AI実行</button>
                     <button class="button" onclick="toggleDebugMode()" id="debugBtn">🔍 デバッグモード</button>
+                    <button class="button" onclick="toggleCpuAutoMode()" id="cpuAutoBtn">🚀 CPU自動開始</button>
                     
                     <!-- 鳴き処理ボタン -->
                     <div id="meldButtons" style="display: none; margin-top: 10px;">
@@ -164,6 +165,15 @@
                     <!-- 和了ボタン -->
                     <div id="winButtons" style="margin-top: 10px;">
                         <button class="button" onclick="processWin('tsumo')" id="tsumoBtn" disabled>🎊 ツモ</button>
+                    </div>
+
+                    <!-- CPU鳴き設定 -->
+                    <div id="cpuMeldSettings" style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 5px;">
+                        <h5>🤖 CPU鳴き設定</h5>
+                        <label><input type="checkbox" id="cpuMeldEnabled" checked> CPU鳴き有効</label><br>
+                        <label><input type="checkbox" id="cpuChiEnabled" checked> チー許可</label>
+                        <label><input type="checkbox" id="cpuPonEnabled" checked> ポン許可</label>  
+                        <label><input type="checkbox" id="cpuKanEnabled" checked> カン許可</label>
                     </div>
                     <div>選択中の牌: <span id="selectedTile">なし</span></div>
                     <div>操作プレイヤー: <span id="selectedPlayer">プレイヤー1</span></div>
@@ -916,6 +926,59 @@
                 // 再帰的に次のAIをチェック
                 setTimeout(() => autoAI(), 1000);
             }, 2000);
+        }
+
+        // CPU自動モード制御
+        let cpuAutoMode = false;
+        
+        async function toggleCpuAutoMode() {
+            if (!currentGameId) {
+                log(`❌ CPU自動モード: ゲーム未作成`);
+                return;
+            }
+
+            cpuAutoMode = !cpuAutoMode;
+            const button = document.getElementById('cpuAutoBtn');
+            
+            try {
+                const response = await fetch(`/api/game/${currentGameId}/cpu-auto`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        enabled: cpuAutoMode,
+                        meldSettings: {
+                            enabled: document.getElementById('cpuMeldEnabled').checked,
+                            chi: document.getElementById('cpuChiEnabled').checked,
+                            pon: document.getElementById('cpuPonEnabled').checked,
+                            kan: document.getElementById('cpuKanEnabled').checked
+                        }
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.status === 'OK') {
+                    button.textContent = cpuAutoMode ? '⏸️ CPU自動停止' : '🚀 CPU自動開始';
+                    button.style.backgroundColor = cpuAutoMode ? '#ff6b6b' : '#4CAF50';
+                    log(`🤖 CPU自動モード: ${cpuAutoMode ? 'ON' : 'OFF'}`);
+                    
+                    if (cpuAutoMode) {
+                        // CPU鳴き設定を表示
+                        const meldEnabled = document.getElementById('cpuMeldEnabled').checked;
+                        const chiEnabled = document.getElementById('cpuChiEnabled').checked;
+                        const ponEnabled = document.getElementById('cpuPonEnabled').checked;
+                        const kanEnabled = document.getElementById('cpuKanEnabled').checked;
+                        
+                        log(`📝 CPU鳴き設定: 全体${meldEnabled ? 'ON' : 'OFF'}, チー${chiEnabled ? 'ON' : 'OFF'}, ポン${ponEnabled ? 'ON' : 'OFF'}, カン${kanEnabled ? 'ON' : 'OFF'}`);
+                    }
+                } else {
+                    log(`❌ CPU自動モード切り替え失敗: ${result.message}`);
+                    cpuAutoMode = !cpuAutoMode; // 元に戻す
+                }
+            } catch (error) {
+                log(`❌ エラー: ${error.message}`);
+                cpuAutoMode = !cpuAutoMode; // 元に戻す
+            }
         }
 
         // 初期化

@@ -146,14 +146,20 @@ function getSuitUnicode(suit, rank) {
 function sortHand(tiles) {
   if (!tiles || tiles.length === 0) return tiles;
   
+  // 元の配列を直接ソートするが、null/undefinedを安全に処理
   return tiles.sort((a, b) => {
+    // データ検証 - null/undefinedは最後に移動
+    if (!a && !b) return 0;
+    if (!a) return 1;
+    if (!b) return -1;
+    
     // 1. 萬子・筒子・索子・字牌の順序
     const suitOrder = { 'man': 1, 'pin': 2, 'sou': 3, 'ji': 4 };
     
     // 字牌の場合
     if (a.honor && b.honor) {
       const honorOrder = { 'east': 1, 'south': 2, 'west': 3, 'north': 4, 'white': 5, 'green': 6, 'red': 7 };
-      return honorOrder[a.honor] - honorOrder[b.honor];
+      return (honorOrder[a.honor] || 0) - (honorOrder[b.honor] || 0);
     }
     
     // 一方が字牌、一方が数牌の場合
@@ -161,12 +167,14 @@ function sortHand(tiles) {
     if (!a.honor && b.honor) return -1;
     
     // 両方数牌の場合
-    if (a.suit !== b.suit) {
-      return suitOrder[a.suit] - suitOrder[b.suit];
+    const aSuit = a.suit || '';
+    const bSuit = b.suit || '';
+    if (aSuit !== bSuit) {
+      return (suitOrder[aSuit] || 0) - (suitOrder[bSuit] || 0);
     }
     
     // 同じスートの場合は数字順
-    return a.rank - b.rank;
+    return (a.rank || 0) - (b.rank || 0);
   });
 }
 
@@ -334,8 +342,7 @@ io.on('connection', (socket) => {
       if (gameState.wallTiles.length > 0) {
         const drawnTile = gameState.wallTiles.pop();
         gameState.players[gameState.currentPlayer].hand.tiles.push(drawnTile);
-        // 手牌をソート
-        gameState.players[gameState.currentPlayer].hand.tiles = sortHand(gameState.players[gameState.currentPlayer].hand.tiles);
+        // ツモ牌は末尾に保持するため、ソートしない
         gameState.remainingTiles = gameState.wallTiles.length;
         
         games.set(socket.gameId, gameState);
@@ -414,19 +421,33 @@ io.on('connection', (socket) => {
 
 // アクションハンドラー関数
 function handleDiscard(socket, gameState, data) {
-  logWithTime(`🔥 [DISCARD] handleDiscard関数が呼ばれました！`);
-  console.log(`🔍 [DEBUG] handleDiscard called`);
-  console.log(`🔍 [DEBUG] currentPlayer: ${gameState.currentPlayer}`);
-  console.log(`🔍 [DEBUG] data:`, data);
-  
-  const player = gameState.players[gameState.currentPlayer];
-  console.log(`🔍 [DEBUG] player tiles count: ${player.hand.tiles.length}`);
-  
-  const tileIndex = player.hand.tiles.findIndex(t => t.id === data.tileId);
-  console.log(`🔍 [DEBUG] tileIndex: ${tileIndex}`);
+  try {
+    logWithTime(`🔥 [DISCARD] handleDiscard関数が呼ばれました！`);
+    console.log(`🔍 [DEBUG] handleDiscard called`);
+    console.log(`🔍 [DEBUG] currentPlayer: ${gameState.currentPlayer}`);
+    console.log(`🔍 [DEBUG] data:`, data);
+    
+    if (!gameState || !gameState.players || !gameState.players[gameState.currentPlayer]) {
+      console.error(`❌ [DISCARD ERROR] Invalid game state or player`);
+      return;
+    }
+    
+    const player = gameState.players[gameState.currentPlayer];
+    console.log(`🔍 [DEBUG] player tiles count: ${player.hand.tiles.length}`);
+    
+    if (!player.hand || !player.hand.tiles) {
+      console.error(`❌ [DISCARD ERROR] Player hand or tiles is undefined`);
+      return;
+    }
+    
+    const tileIndex = player.hand.tiles.findIndex(t => t && t.id === data.tileId);
+    console.log(`🔍 [DEBUG] tileIndex: ${tileIndex}`);
   
   if (tileIndex !== -1) {
     const discardedTile = player.hand.tiles.splice(tileIndex, 1)[0];
+    
+    // 捨て牌後に手牌をソート（整理）
+    player.hand.tiles = sortHand(player.hand.tiles);
     
     // タイムスタンプを追加
     discardedTile.timestamp = Date.now();
@@ -466,6 +487,10 @@ function handleDiscard(socket, gameState, data) {
     io.to(socket.gameId).emit('gameState', gameState);
   } else {
     console.log(`❌ [ERROR] 指定された牌が見つかりません: ${data.tileId}`);
+  }
+  } catch (error) {
+    console.error(`❌ [DISCARD CRITICAL ERROR] handleDiscard例外:`, error);
+    console.error(`❌ [DISCARD STACK] スタックトレース:`, error.stack);
   }
 }
 
@@ -668,12 +693,16 @@ function handleAnkan(gameState, playerId, data) {
   // 手牌をソート
   player.hand.tiles = sortHand(player.hand.tiles);
   
-  // 嶺上牌を引く
-  if (gameState.wallTiles.length > 0) {
-    const drawnTile = gameState.wallTiles.pop();
+  // 嶺上牌を引く（王牌から取得）
+  if (gameState.rinshanTiles && gameState.rinshanTiles.length > 0) {
+    const drawnTile = gameState.rinshanTiles.shift();
     player.hand.tiles.push(drawnTile);
-    player.hand.tiles = sortHand(player.hand.tiles);
-    gameState.remainingTiles = gameState.wallTiles.length;
+    // 嶺上牌は末尾に保持するため、ソートしない
+    
+    // 新しいドラ表示牌を開く
+    addNewDoraIndicator(gameState);
+    
+    logWithTime(`🎲 [KAN] 嶺上牌: ${drawnTile.displayName}、新ドラ表示牌: ${gameState.doraIndicators[gameState.doraIndicators.length - 1]?.displayName}`);
   }
   
   logWithTime(`✅ [ANKAN] 暗槓完了: プレイヤー${playerId}が${meld.tiles.map(t => t.displayName).join('')}を暗槓`);
@@ -720,12 +749,16 @@ function handleMinkan(gameState, playerId, data) {
   // 手牌をソート
   player.hand.tiles = sortHand(player.hand.tiles);
   
-  // 嶺上牌を引く
-  if (gameState.wallTiles.length > 0) {
-    const drawnTile = gameState.wallTiles.pop();
+  // 嶺上牌を引く（王牌から取得）
+  if (gameState.rinshanTiles && gameState.rinshanTiles.length > 0) {
+    const drawnTile = gameState.rinshanTiles.shift();
     player.hand.tiles.push(drawnTile);
-    player.hand.tiles = sortHand(player.hand.tiles);
-    gameState.remainingTiles = gameState.wallTiles.length;
+    // 嶺上牌は末尾に保持するため、ソートしない
+    
+    // 新しいドラ表示牌を開く
+    addNewDoraIndicator(gameState);
+    
+    logWithTime(`🎲 [KAN] 嶺上牌: ${drawnTile.displayName}、新ドラ表示牌: ${gameState.doraIndicators[gameState.doraIndicators.length - 1]?.displayName}`);
   }
   
   // ターンをこのプレイヤーに移す
@@ -951,10 +984,21 @@ function checkMentsuPattern(tiles, neededCount) {
     return false;
   }
   
-  const sortedTiles = [...tiles].sort((a, b) => {
-    if (a.suit !== b.suit) return a.suit.localeCompare(b.suit);
-    if (a.rank !== b.rank) return a.rank - b.rank;
-    if (a.honor !== b.honor) return (a.honor || '').localeCompare(b.honor || '');
+  const sortedTiles = [...tiles].filter(tile => tile != null).sort((a, b) => {
+    // データ検証
+    if (!a || !b) {
+      console.error('❌ [SORT ERROR] Null tile in sort:', { a, b });
+      return 0;
+    }
+    
+    const aSuit = a.suit || '';
+    const bSuit = b.suit || '';
+    const aHonor = a.honor || '';
+    const bHonor = b.honor || '';
+    
+    if (aSuit !== bSuit) return aSuit.localeCompare(bSuit);
+    if (a.rank !== b.rank) return (a.rank || 0) - (b.rank || 0);
+    if (aHonor !== bHonor) return aHonor.localeCompare(bHonor);
     return 0;
   });
   
@@ -1676,8 +1720,7 @@ function handleDraw(socket, gameState, data) {
   if (gameState.wallTiles.length > 0) {
     const drawnTile = gameState.wallTiles.pop();
     gameState.players[gameState.currentPlayer].hand.tiles.push(drawnTile);
-    // 手牌をソート
-    gameState.players[gameState.currentPlayer].hand.tiles = sortHand(gameState.players[gameState.currentPlayer].hand.tiles);
+    // ツモ牌は末尾に保持するため、ソートしない
     gameState.remainingTiles = gameState.wallTiles.length;
     
     games.set(socket.gameId, gameState);
@@ -1711,6 +1754,17 @@ function startCpuAutoGame(gameId) {
     }
     
     console.log(`🤖 [DEBUG] currentPlayer: ${currentState.currentPlayer}`);
+    
+    // 14枚持っているCPUプレイヤーを検索（緊急時の補正）
+    for (let i = 0; i < 4; i++) {
+      const player = currentState.players[i];
+      if (player.type === 'cpu' && player.hand.tiles.length === 14) {
+        console.log(`🚨 [EMERGENCY] CPU${i}(${player.name})が14枚保持 - 強制実行`);
+        currentState.currentPlayer = i;
+        break;
+      }
+    }
+    
     const currentPlayer = currentState.players[currentState.currentPlayer];
     console.log(`🤖 [DEBUG] currentPlayer type: ${currentPlayer.type}`);
     console.log(`🤖 [DEBUG] currentPlayer name: ${currentPlayer.name}`);
@@ -1728,8 +1782,7 @@ function startCpuAutoGame(gameId) {
       if (currentState.wallTiles.length > 0) {
         const drawnTile = currentState.wallTiles.pop();
         currentPlayer.hand.tiles.push(drawnTile);
-        // 手牌をソート
-        currentPlayer.hand.tiles = sortHand(currentPlayer.hand.tiles);
+        // ツモ牌は末尾に保持するため、ソートしない
         currentState.remainingTiles = currentState.wallTiles.length;
         console.log(`🎯 プレイヤー${currentState.currentPlayer}がツモ: ${drawnTile.displayName || drawnTile.unicode} (手牌${currentPlayer.hand.tiles.length}枚)`);
         
