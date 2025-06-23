@@ -316,14 +316,15 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
-            font-weight: 600;
+            font-size: 24px; /* Unicode麻雀牌用に大きく */
+            font-weight: normal; /* Unicode牌は太字不要 */
             cursor: default;
             min-width: 40px;
             min-height: 50px;
             max-width: 40px;
             max-height: 50px;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            font-family: 'Noto Sans CJK JP', 'Yu Gothic', 'Segoe UI Emoji', monospace; /* Unicode絵文字フォント */
         }
 
         .river-tile.red {
@@ -707,8 +708,8 @@
             border: 2px solid #dee2e6;
             border-radius: 8px;
             padding: 8px 6px;
-            font-size: 20px;
-            font-weight: 700;
+            font-size: 32px; /* Unicode麻雀牌用に大きく */
+            font-weight: normal; /* Unicode牌は太字不要 */
             cursor: pointer;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             width: 50px;
@@ -718,10 +719,10 @@
             align-items: center;
             justify-content: center;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            font-family: 'Noto Sans CJK JP', 'Yu Gothic', 'Segoe UI Emoji', monospace; /* Unicode絵文字フォント */
             user-select: none;
             position: relative;
             overflow: hidden;
-            font-family: 'Noto Sans JP', serif;
             line-height: 0.9;
             white-space: pre-line;
             text-align: center;
@@ -4244,13 +4245,31 @@
         
         // 牌の表示名を取得
         function getTileDisplayName(tile) {
+            // Unicodeが利用可能な場合は優先
+            if (tile.unicode) {
+                return tile.unicode;
+            }
+            
             if (tile.honor) {
-                const honorNames = {
-                    'east': '東', 'south': '南', 'west': '西', 'north': '北',
-                    'white': '白', 'green': '發', 'red': '中'
+                // 字牌のUnicode
+                const honorUnicodes = {
+                    'east': '🀀', 'south': '🀁', 'west': '🀂', 'north': '🀃',
+                    'white': '🀆', 'green': '🀅', 'red': '🀄'
                 };
-                return honorNames[tile.honor] || tile.honor;
+                return honorUnicodes[tile.honor] || tile.honor;
             } else {
+                // 数牌のUnicode
+                const suitUnicodes = {
+                    man: ['🀇', '🀈', '🀉', '🀊', '🀋', '🀌', '🀍', '🀎', '🀏'],
+                    pin: ['🀙', '🀚', '🀛', '🀜', '🀝', '🀞', '🀟', '🀠', '🀡'],
+                    sou: ['🀐', '🀑', '🀒', '🀓', '🀔', '🀕', '🀖', '🀗', '🀘']
+                };
+                
+                if (suitUnicodes[tile.suit] && tile.rank >= 1 && tile.rank <= 9) {
+                    return suitUnicodes[tile.suit][tile.rank - 1];
+                }
+                
+                // フォールバック
                 const suitNames = { 'man': 'm', 'pin': 'p', 'sou': 's' };
                 return `${tile.rank}${suitNames[tile.suit] || tile.suit}`;
             }
@@ -6039,34 +6058,43 @@
             return kanjiNumbers[num] || num;
         }
 
-        // 牌の表示名取得（縦書き対応）
+        // 牌の表示名取得（Unicode優先）
         function getTileDisplayName(tile) {
-            if (!tile) return '不明';
+            if (!tile) return '🀫';
             
             try {
+                // Unicodeが利用可能な場合は最優先
+                if (tile.unicode) {
+                    return tile.unicode;
+                }
+                
                 // 字牌（役牌・風牌）の処理
                 if (tile.suit === 'honors' || tile.honor) {
-                    const honorMap = {
-                        east: '東', south: '南', west: '西', north: '北',
-                        haku: '白', hatsu: '發', chun: '中',
-                        white: '白', green: '發', red: '中'  // 英語表記にも対応
+                    const honorUnicodes = {
+                        east: '🀀', south: '🀁', west: '西', north: '🀃',
+                        haku: '🀆', hatsu: '🀅', chun: '🀄',
+                        white: '🀆', green: '🀅', red: '🀄'  // 英語表記にも対応
                     };
                     const key = tile.type || tile.honor;
-                    return honorMap[key] || key;
+                    return honorUnicodes[key] || key;
                 }
                 
                 // 数牌（萬子・筒子・索子）の処理
                 if (tile.suit && (tile.rank || tile.number)) {
-                    const suitMap = {
-                        man: '萬', pin: '筒', sou: '索'
+                    const suitUnicodes = {
+                        man: ['🀇', '🀈', '🀉', '🀊', '🀋', '🀌', '🀍', '🀎', '🀏'],
+                        pin: ['🀙', '🀚', '🀛', '🀜', '🀝', '🀞', '🀟', '🀠', '🀡'],
+                        sou: ['🀐', '🀑', '🀒', '🀓', '🀔', '🀕', '🀖', '🀗', '🀘']
                     };
-                    const kanjiNumber = numberToKanji(tile.rank || tile.number);
-                    const suitChar = suitMap[tile.suit] || tile.suit;
-                    return `${kanjiNumber}\n${suitChar}`;
+                    
+                    const rank = tile.rank || tile.number;
+                    if (suitUnicodes[tile.suit] && rank >= 1 && rank <= 9) {
+                        return suitUnicodes[tile.suit][rank - 1];
+                    }
                 }
                 
                 // フォールバック
-                return tile.displayName || tile.unicode || `${tile.suit}${tile.rank}` || '?';
+                return tile.displayName || `${tile.suit}${tile.rank}` || '🀫';
                 
             } catch (error) {
                 console.error('getTileDisplayName error:', error, tile);
