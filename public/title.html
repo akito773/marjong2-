@@ -524,6 +524,21 @@
                 </ul>
                 <button class="mode-button">統計を見る</button>
             </div>
+
+            <div class="mode-card" onclick="selectMode('single')">
+                <div class="mode-icon">🔧</div>
+                <h2 class="mode-title">一人用デバッグ</h2>
+                <p class="mode-description">
+                    開発者向けの一人用デバッグツール。ゲームシステムの動作確認や機能テストに最適。
+                </p>
+                <ul class="mode-features">
+                    <li>システムテスト</li>
+                    <li>デバッグ機能</li>
+                    <li>機能検証</li>
+                    <li>開発者向け</li>
+                </ul>
+                <button class="mode-button">デバッグ開始</button>
+            </div>
         </div>
     </div>
 
@@ -590,17 +605,19 @@
             showLoading();
             
             const routes = {
-                'multiplayer': '/multiplayer-new.html',
+                'multiplayer': '/lobby.html',
                 'ai': '/game-new.html',
                 'tutorial': '#tutorial',
-                'stats': '/stats.html'
+                'stats': '/stats.html',
+                'single': '/single-player.html'
             };
             
             const messages = {
                 'multiplayer': 'マルチプレイヤーモードを起動しています...',
                 'ai': 'AI対戦モードを起動しています...',
                 'tutorial': 'チュートリアルを準備しています...',
-                'stats': '統計データを読み込んでいます...'
+                'stats': '統計データを読み込んでいます...',
+                'single': '一人用デバッグモードを起動しています...'
             };
             
             // ローディングメッセージを更新
@@ -723,6 +740,9 @@ Complete Edition
                         break;
                     case '4':
                         selectMode('stats');
+                        break;
+                    case '5':
+                        selectMode('single');
                         break;
                     case 'Escape':
                         hideLoading();
