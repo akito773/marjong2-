@@ -29,6 +29,37 @@
             margin-bottom: 40px;
             color: #FFD700;
         }
+        .game-links {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+        .game-link {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            text-decoration: none;
+            padding: 20px 30px;
+            border-radius: 12px;
+            font-size: 1.1em;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            border: 2px solid rgba(255,255,255,0.3);
+            backdrop-filter: blur(10px);
+        }
+        .game-link:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .game-link.primary {
+            background: rgba(255, 193, 7, 0.8);
+            border-color: #ffc107;
+        }
+        .game-link.primary:hover {
+            background: rgba(255, 193, 7, 0.9);
+        }
         .status { 
             background: rgba(255,255,255,0.1); 
             padding: 25px; 
@@ -87,9 +118,12 @@
         
         <div class="status">
             <h3>🎮 ゲームメニュー</h3>
-            <button onclick="location.href='/game-new.html'" style="margin: 10px;">🀄 麻雀ゲーム開始</button>
-            <button onclick="location.href='/tutorial'" style="margin: 10px; background: #FF9800;">📚 役チュートリアル</button>
-            <button onclick="location.href='/single-player'" style="margin: 10px; background: #9C27B0;">🔧 一人用デバッグツール</button>
+            <div class="game-links">
+                <a href="/lobby.html" class="game-link primary">🌐 オンライン麻雀</a>
+                <a href="/game-new.html" class="game-link">🀄 ローカルゲーム</a>
+                <a href="/tutorial" class="game-link">📚 役チュートリアル</a>
+                <a href="/single-player" class="game-link">🔧 デバッグツール</a>
+            </div>
         </div>
         
         <div class="status">

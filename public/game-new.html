@@ -281,8 +281,8 @@
         .river-top, .river-bottom {
             grid-template-columns: repeat(6, 1fr);
             grid-template-rows: repeat(3, 1fr);
-            width: 240px;
-            height: 120px;
+            width: 230px; /* 小さな河牌に合わせて調整 */
+            height: 130px; /* 小さな河牌に合わせて調整 */
             margin: 0 auto;
         }
 
@@ -290,41 +290,45 @@
         .river-left, .river-right {
             grid-template-columns: repeat(6, 1fr);
             grid-template-rows: repeat(3, 1fr);
-            width: 240px;
-            height: 120px;
+            width: 230px; /* 小さな河牌に合わせて調整 */
+            height: 130px; /* 小さな河牌に合わせて調整 */
             transform: rotate(90deg);
         }
         
         /* 2K対応: 河エリア */
         @media (min-width: 2560px) and (min-height: 1440px) {
             .river-top, .river-bottom {
-                width: 300px;
-                height: 150px;
+                width: 280px; /* 2K用に調整 */
+                height: 160px; /* 2K用に調整 */
             }
             
             .river-left, .river-right {
-                width: 300px;
-                height: 150px;
+                width: 280px; /* 2K用に調整 */
+                height: 160px; /* 2K用に調整 */
             }
         }
 
         /* 2K対応河の牌スタイル */
         .river-tile {
             background: #f8f9fa;
-            border: 2px solid #dee2e6;
-            border-radius: 4px;
+            border: 1px solid #dee2e6; /* ボーダーを細く */
+            border-radius: 2px; /* 角丸を小さく */
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px; /* Unicode麻雀牌用に大きく */
-            font-weight: normal; /* Unicode牌は太字不要 */
+            font-size: 36px;
+            font-weight: normal;
             cursor: default;
-            min-width: 40px;
-            min-height: 50px;
-            max-width: 40px;
-            max-height: 50px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-            font-family: 'Noto Sans CJK JP', 'Yu Gothic', 'Segoe UI Emoji', monospace; /* Unicode絵文字フォント */
+            min-width: 36px; /* 文字サイズに合わせて調整 */
+            min-height: 42px; /* 文字サイズに合わせて調整 */
+            max-width: 36px;
+            max-height: 42px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+            font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Segoe UI Symbol', monospace;
+            line-height: 1;
+            overflow: visible;
+            padding: 0;
+            margin: 0; /* マージンも0に */
         }
 
         .river-tile.red {
@@ -346,18 +350,28 @@
         }
 
         /* 2K対応各プレイヤーの河牌方向 */
-        .river-left .river-tile, 
+        .river-left .river-tile {
+            /* 河エリアが90度回転されているので、牌は-75度回転（15度傾斜） */
+            transform: rotate(-75deg);
+            width: 50px;
+            height: 40px;
+            font-size: 14px;
+        }
+        
         .river-right .river-tile {
-            /* 河エリアが90度回転されているので、牌は-90度回転で正常に */
-            transform: rotate(-90deg);
+            /* 河エリアが90度回転されているので、牌は-45度回転（45度時計回り傾斜） */
+            transform: rotate(-45deg);
             width: 50px;
             height: 40px;
             font-size: 14px;
         }
 
-        .river-left .river-tile.reach, 
+        .river-left .river-tile.reach {
+            transform: rotate(15deg); /* リーチ牌は15度傾斜 */
+        }
+        
         .river-right .river-tile.reach {
-            transform: rotate(0deg); /* リーチ牌は河エリアの回転で相殺 */
+            transform: rotate(45deg); /* リーチ牌は45度時計回り傾斜 */
         }
 
         .river-top .river-tile {
@@ -705,26 +719,26 @@
 
         .tile {
             background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
-            border: 2px solid #dee2e6;
-            border-radius: 8px;
-            padding: 8px 6px;
-            font-size: 32px; /* Unicode麻雀牌用に大きく */
-            font-weight: normal; /* Unicode牌は太字不要 */
+            border: 1px solid #dee2e6; /* ボーダーを細く */
+            border-radius: 4px; /* 角丸を小さく */
+            padding: 0;
+            margin: 0; /* マージンも0に */
+            font-size: 52px;
+            font-weight: normal;
             cursor: pointer;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            width: 50px;
-            height: 65px;
+            width: 52px; /* 文字サイズに合わせて調整 */
+            height: 60px; /* 文字サイズに合わせて調整 */
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.8);
-            font-family: 'Noto Sans CJK JP', 'Yu Gothic', 'Segoe UI Emoji', monospace; /* Unicode絵文字フォント */
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+            font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Segoe UI Symbol', monospace;
             user-select: none;
             position: relative;
-            overflow: hidden;
-            line-height: 0.9;
-            white-space: pre-line;
+            overflow: visible;
+            line-height: 1; /* ライン高さを1に */
             text-align: center;
         }
 
@@ -740,10 +754,11 @@
         }
 
         .tile:hover {
-            transform: translateY(-4px) scale(1.05);
+            transform: scale(1.05);
             box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.9);
             background: linear-gradient(145deg, #ffffff 0%, #e3f2fd 100%);
             border-color: #2196f3;
+            z-index: 10;
         }
 
         .tile:hover::before {
@@ -753,9 +768,10 @@
         .tile.selected {
             background: linear-gradient(145deg, #fff8e1 0%, #ffecb3 100%);
             border-color: #ff9800;
-            transform: translateY(-8px) scale(1.1);
+            transform: scale(1.1);
             box-shadow: 0 12px 20px rgba(255, 152, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.9);
             animation: selectedPulse 1.5s ease-in-out infinite;
+            z-index: 15;
         }
 
         @keyframes selectedPulse {
@@ -1401,10 +1417,19 @@
             updateGameDisplay();
         });
         
-        socket.on('gameCreated', (data) => {
-            console.log('🎮 ゲーム作成成功:', data);
-            gameId = data.gameId;
+        socket.on('roomCreated', (data) => {
+            console.log('🎮 ルーム作成成功:', data);
+            gameId = data.room.id;
             showNotification('ゲームが作成されました！', 'success');
+            
+            // シングルプレイヤーゲームの場合、自動で準備完了にする
+            setTimeout(() => {
+                socket.emit('playerReady', {
+                    roomId: gameId,
+                    ready: true
+                });
+                console.log('🔄 自動準備完了を送信');
+            }, 500);
         });
         
         let gameStartNotified = false;
@@ -2168,7 +2193,7 @@
             
             // Socket.IOでルーム作成要求
             socket.emit('createRoom', {
-                playerId: 'player_0',
+                roomName: 'シングルプレイヤー戦',
                 playerName: 'プレイヤー1'
             });
         }
@@ -6204,12 +6229,12 @@
             
             tiles.forEach((tile, index) => {
                 tile.style.opacity = '0';
-                tile.style.transform = 'translateY(-50px)';
+                tile.style.transform = 'scale(0.8)';
                 
                 setTimeout(() => {
                     tile.style.transition = 'all 0.3s ease-out';
                     tile.style.opacity = '1';
-                    tile.style.transform = 'translateY(0)';
+                    tile.style.transform = 'scale(1)';
                 }, index * 100);
             });
         }
@@ -6219,11 +6244,11 @@
             if (!tileElement) return;
             
             tileElement.style.transition = 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
-            tileElement.style.transform = 'translateY(-20px) scale(0.9)';
+            tileElement.style.transform = 'scale(0.9)';
             tileElement.style.opacity = '0.7';
             
             setTimeout(() => {
-                tileElement.style.transform = 'translateY(0) scale(1)';
+                tileElement.style.transform = 'scale(1)';
                 tileElement.style.opacity = '1';
             }, 400);
         }

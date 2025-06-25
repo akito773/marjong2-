@@ -8,6 +8,172 @@ const server = http.createServer(app);
 const io = socketIo(server);
 const PORT = process.env.PORT || 3000;
 
+// オンライン麻雀用のデータ構造
+const rooms = new Map(); // 部屋管理
+const users = new Map(); // ユーザー管理
+const roomIdCounter = { current: 1000 }; // 部屋ID管理
+
+// CPU名前とキャラクター設定（高度AI 15キャラクター）
+const CPU_CHARACTERS = [
+    // 1. 守備型：安全第一
+    { 
+        name: '守備の武', 
+        nickname: 'タケシ',
+        personality: 'defensive', 
+        description: '安全牌しか切らない超守備型。放銃を絶対に避ける慎重派',
+        priority: { safety: 10, efficiency: 3, yaku: 2, speed: 1, aggression: 0 },
+        behavior: { riichiThreshold: 0.9, meldFrequency: 0.15, dangerAvoidance: 0.95, foldThreshold: 0.3 },
+        catchphrase: '安全第一だ！'
+    },
+    // 2. 攻撃型：役満狙い
+    { 
+        name: '攻撃の明', 
+        nickname: 'アキラ',
+        personality: 'aggressive', 
+        description: '役満・跳満狙いの超攻撃型。危険を顧みず大きな役を狙う',
+        priority: { safety: 1, efficiency: 5, yaku: 10, speed: 3, aggression: 10 },
+        behavior: { riichiThreshold: 0.3, meldFrequency: 0.85, dangerAvoidance: 0.2, foldThreshold: 0.9 },
+        catchphrase: '行くぞ、大きく行くぞ！'
+    },
+    // 3. バランス型：効率重視
+    { 
+        name: 'バランスの聡', 
+        nickname: 'サトシ',
+        personality: 'balanced', 
+        description: '効率とリスクのバランスを重視する万能型',
+        priority: { safety: 6, efficiency: 8, yaku: 5, speed: 6, aggression: 5 },
+        behavior: { riichiThreshold: 0.6, meldFrequency: 0.5, dangerAvoidance: 0.6, foldThreshold: 0.5 },
+        catchphrase: 'バランスが大事だ'
+    },
+    // 4. スピード型：速攻
+    { 
+        name: 'スピードの雪', 
+        nickname: 'ユキ',
+        personality: 'risky', 
+        description: '一刻も早い和了を目指すスピード重視型',
+        priority: { safety: 3, efficiency: 7, yaku: 2, speed: 10, aggression: 7 },
+        behavior: { riichiThreshold: 0.4, meldFrequency: 0.7, dangerAvoidance: 0.3, foldThreshold: 0.7 },
+        catchphrase: '早く、早く！'
+    },
+    // 5. 役師型：高得点役
+    { 
+        name: '役師の花', 
+        nickname: 'ハナ',
+        personality: 'balanced', 
+        description: '美しい役作りを追求する完璧主義者',
+        priority: { safety: 5, efficiency: 6, yaku: 9, speed: 2, aggression: 4 },
+        behavior: { riichiThreshold: 0.7, meldFrequency: 0.3, dangerAvoidance: 0.7, foldThreshold: 0.4 },
+        catchphrase: '美しい役を作ろう'
+    },
+    // 6. 強運型：運任せ
+    { 
+        name: '強運の太郎', 
+        nickname: 'タロウ',
+        personality: 'risky', 
+        description: '運とツキを信じる楽天家',
+        priority: { safety: 2, efficiency: 4, yaku: 6, speed: 5, aggression: 8 },
+        behavior: { riichiThreshold: 0.5, meldFrequency: 0.6, dangerAvoidance: 0.1, foldThreshold: 0.8 },
+        catchphrase: '運が味方してくれる！'
+    },
+    // 7. 忍耐型：待ちの美学
+    { 
+        name: '忍耐の次郎', 
+        nickname: 'ジロウ',
+        personality: 'defensive', 
+        description: 'じっくりと好機を待つ我慢強い戦法',
+        priority: { safety: 8, efficiency: 5, yaku: 7, speed: 1, aggression: 2 },
+        behavior: { riichiThreshold: 0.8, meldFrequency: 0.25, dangerAvoidance: 0.8, foldThreshold: 0.3 },
+        catchphrase: '待つのも戦略だ'
+    },
+    // 8. 柔軟型：適応力
+    { 
+        name: '柔軟の美来', 
+        nickname: 'ミク',
+        personality: 'balanced', 
+        description: '状況に応じて戦術を変える適応型',
+        priority: { safety: 5, efficiency: 7, yaku: 6, speed: 5, aggression: 6 },
+        behavior: { riichiThreshold: 0.55, meldFrequency: 0.55, dangerAvoidance: 0.55, foldThreshold: 0.45 },
+        catchphrase: '状況に合わせて行こう'
+    },
+    // 9. 門前型：職人気質
+    { 
+        name: '門前の弘治', 
+        nickname: 'コウジ',
+        personality: 'defensive', 
+        description: '門前清自摸和を愛する職人',
+        priority: { safety: 7, efficiency: 6, yaku: 8, speed: 2, aggression: 3 },
+        behavior: { riichiThreshold: 0.6, meldFrequency: 0.1, dangerAvoidance: 0.75, foldThreshold: 0.4 },
+        catchphrase: '門前の美しさを見せよう'
+    },
+    // 10. 初心者型：天然キャラ
+    { 
+        name: '初心者のナナ', 
+        nickname: 'ナナ',
+        personality: 'risky', 
+        description: '不安定だが愛されキャラの初心者',
+        priority: { safety: 3, efficiency: 2, yaku: 4, speed: 6, aggression: 5 },
+        behavior: { riichiThreshold: 0.3, meldFrequency: 0.8, dangerAvoidance: 0.2, foldThreshold: 0.6 },
+        catchphrase: 'えーっと、これで良いのかな？'
+    },
+    // 11. 研究型：理論派
+    { 
+        name: '研究者の賢治', 
+        nickname: 'ケンジ',
+        personality: 'balanced', 
+        description: 'データと理論に基づく合理的判断',
+        priority: { safety: 6, efficiency: 9, yaku: 5, speed: 4, aggression: 4 },
+        behavior: { riichiThreshold: 0.65, meldFrequency: 0.4, dangerAvoidance: 0.7, foldThreshold: 0.5 },
+        catchphrase: '理論的に考えよう'
+    },
+    // 12. 職人型：平和特化
+    { 
+        name: '職人のイチロー', 
+        nickname: 'イチロー',
+        personality: 'defensive', 
+        description: '平和一筋の頑固職人',
+        priority: { safety: 9, efficiency: 7, yaku: 6, speed: 2, aggression: 1 },
+        behavior: { riichiThreshold: 0.8, meldFrequency: 0.05, dangerAvoidance: 0.9, foldThreshold: 0.2 },
+        catchphrase: '平和こそ至高だ'
+    },
+    // 13. ギャンブラー型：一発逆転
+    { 
+        name: 'ギャンブラーの蘭', 
+        nickname: 'ラン',
+        personality: 'risky', 
+        description: 'リスクを愛するギャンブラー',
+        priority: { safety: 1, efficiency: 3, yaku: 8, speed: 7, aggression: 10 },
+        behavior: { riichiThreshold: 0.2, meldFrequency: 0.9, dangerAvoidance: 0.1, foldThreshold: 0.95 },
+        catchphrase: 'リスクこそチャンス！'
+    },
+    // 14. 老練型：経験重視
+    { 
+        name: '老練のゴロー', 
+        nickname: 'ゴロー',
+        personality: 'balanced', 
+        description: '豊富な経験に基づく老練な判断',
+        priority: { safety: 7, efficiency: 6, yaku: 7, speed: 3, aggression: 5 },
+        behavior: { riichiThreshold: 0.7, meldFrequency: 0.45, dangerAvoidance: 0.75, foldThreshold: 0.4 },
+        catchphrase: '経験がものを言う'
+    },
+    // 15. AI型：完璧計算
+    { 
+        name: 'AI-ZERO', 
+        nickname: 'ゼロ',
+        personality: 'balanced', 
+        description: '完璧な計算に基づく人工知能',
+        priority: { safety: 8, efficiency: 10, yaku: 6, speed: 5, aggression: 6 },
+        behavior: { riichiThreshold: 0.75, meldFrequency: 0.6, dangerAvoidance: 0.8, foldThreshold: 0.35 },
+        catchphrase: '最適解を算出しました'
+    }
+];
+
+// 部屋状態の定義
+const ROOM_STATUS = {
+    WAITING: 'waiting',
+    PLAYING: 'playing',
+    FINISHED: 'finished'
+};
+
 // 静的ファイルの配信
 app.use(express.static('public'));
 app.use(express.json());
@@ -25,6 +191,49 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     version: '0.1.0',
     environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// 部屋一覧取得API
+app.get('/api/rooms', (req, res) => {
+  const roomList = Array.from(rooms.values()).map(room => ({
+    id: room.id,
+    name: room.name,
+    status: room.status,
+    playerCount: room.players.filter(p => p.type === 'human').length,
+    maxPlayers: 4,
+    created: room.created,
+    owner: room.owner
+  }));
+  
+  res.json({
+    status: 'OK',
+    rooms: roomList
+  });
+});
+
+// 部屋作成API
+app.post('/api/rooms', (req, res) => {
+  const { roomName, playerName } = req.body;
+  
+  if (!roomName || !playerName) {
+    return res.status(400).json({
+      status: 'Error',
+      message: '部屋名とプレイヤー名が必要です'
+    });
+  }
+
+  const roomId = (roomIdCounter.current++).toString();
+  const room = createRoom(roomId, roomName, playerName);
+  
+  res.json({
+    status: 'OK',
+    room: {
+      id: room.id,
+      name: room.name,
+      status: room.status,
+      playerCount: room.players.filter(p => p.type === 'human').length
+    }
   });
 });
 
@@ -279,7 +488,7 @@ function createGameState(gameId) {
 // タイムスタンプ付きログ関数
 const fs = require('fs');
 
-function logWithTime(message) {
+function logWithTime(message, roomId = null) {
   const now = new Date();
   const timestamp = now.toLocaleString('ja-JP', {
     year: 'numeric',
@@ -290,7 +499,8 @@ function logWithTime(message) {
     second: '2-digit',
     fractionalSecondDigits: 3
   });
-  const logMessage = `[${timestamp}] ${message}`;
+  const roomPrefix = roomId ? `[ROOM ${roomId}] ` : '';
+  const logMessage = `[${timestamp}] ${roomPrefix}${message}`;
   console.log(logMessage);
   
   // ファイルにも出力
@@ -301,128 +511,13 @@ function logWithTime(message) {
   }
 }
 
-// Socket.IO接続処理
-io.on('connection', (socket) => {
-  console.log('🔌 クライアントが接続しました:', socket.id);
-  
-  socket.on('disconnect', () => {
-    console.log('❌ クライアントが切断しました:', socket.id);
-  });
-  
-  socket.on('ping', () => {
-    socket.emit('pong');
-  });
-  
-  // ゲーム作成
-  socket.on('createRoom', (data) => {
-    const gameId = 'game_' + Date.now();
-    const gameState = createGameState(gameId);
-    games.set(gameId, gameState);
-    
-    socket.join(gameId);
-    socket.gameId = gameId;
-    
-    console.log(`🎮 新しいゲームを作成: ${gameId}`);
-    socket.emit('gameCreated', { gameId: gameId });
-    socket.emit('gameState', gameState);
-  });
-  
-  // ゲーム状態要求
-  socket.on('requestGameState', () => {
-    if (socket.gameId && games.has(socket.gameId)) {
-      const gameState = games.get(socket.gameId);
-      socket.emit('gameState', gameState);
-    }
-  });
-  
-  // 牌を引く
-  socket.on('drawTile', () => {
-    if (socket.gameId && games.has(socket.gameId)) {
-      const gameState = games.get(socket.gameId);
-      if (gameState.wallTiles.length > 0) {
-        const drawnTile = gameState.wallTiles.pop();
-        gameState.players[gameState.currentPlayer].hand.tiles.push(drawnTile);
-        // ツモ牌は末尾に保持するため、ソートしない
-        gameState.remainingTiles = gameState.wallTiles.length;
-        
-        games.set(socket.gameId, gameState);
-        io.to(socket.gameId).emit('gameState', gameState);
-        
-        console.log(`🎯 プレイヤー${gameState.currentPlayer}が牌を引きました: ${drawnTile.displayName || drawnTile.unicode}`);
-      }
-    }
-  });
-
-  // メルド処理（チー・ポン・カン）
-  socket.on('meld', (data) => {
-    logWithTime('🀄 [MELD] メルド要求: ' + JSON.stringify(data));
-    if (socket.gameId && games.has(socket.gameId)) {
-      const gameState = games.get(socket.gameId);
-      handleMeld(socket, gameState, data);
-    }
-  });
-  
-  // プレイヤーアクション（統一ハンドラー）
-  socket.on('playerAction', (data) => {
-    console.log(`🚨 PLAYERACTION RECEIVED!!! Type: ${data.type}`);
-    fs.appendFileSync('debug.log', `🚨 PLAYERACTION RECEIVED!!! Type: ${data.type}\n`);
-    logWithTime(`🎯 [PLAYER ACTION] 受信: ${data.type}`);
-    console.log(`🔍 [DEBUG] playerAction received:`, data);
-    console.log(`🔍 [DEBUG] socket.gameId:`, socket.gameId);
-    console.log(`🔍 [DEBUG] games.has(socket.gameId):`, games.has(socket.gameId));
-    
-    if (!socket.gameId || !games.has(socket.gameId)) {
-      console.log(`❌ [ERROR] ゲームが見つかりません: gameId=${socket.gameId}`);
-      socket.emit('error', { message: 'ゲームが見つかりません' });
-      return;
-    }
-    
-    const gameState = games.get(socket.gameId);
-    console.log(`🔍 [DEBUG] gameState found, processing action: ${data.type}`);
-    
-    switch (data.type) {
-      case 'discard':
-        console.log(`🔍 [DEBUG] Handling discard action`);
-        handleDiscard(socket, gameState, data);
-        break;
-      case 'draw':
-        console.log(`🔍 [DEBUG] Handling draw action`);
-        handleDraw(socket, gameState, data);
-        break;
-      case 'chi':
-      case 'pon':
-      case 'kan':
-      case 'ankan':
-        logWithTime(`🔍 [PLAYER ACTION] メルドアクション: ${data.type}`);
-        handleMeld(socket, gameState, data);
-        break;
-      case 'tsumo':
-        logWithTime(`🎯 [PLAYER ACTION] ツモ和了: ${data.playerId}`);
-        handleTsumo(socket, gameState, data);
-        break;
-      case 'ron':
-        logWithTime(`🎯 [PLAYER ACTION] ロン和了: ${data.playerId}`);
-        handleRon(socket, gameState, data);
-        break;
-      case 'riichi':
-        logWithTime(`🔥 [PLAYER ACTION] リーチ宣言: ${data.playerId}`);
-        handleRiichi(socket, gameState, data);
-        break;
-      default:
-        console.log(`❌ [ERROR] 未知のアクション: ${data.type}`);
-    }
-  });
-  
-  // 牌を捨てる（従来の互換性のため）
-  socket.on('discardTile', (data) => {
-    handleDiscard(socket, games.get(socket.gameId), { tileId: data.tileId });
-  });
-});
+// 古いSocket.IOハンドラーは削除済み - 統合版ハンドラーを下部で実装
 
 // アクションハンドラー関数
 function handleDiscard(socket, gameState, data) {
   try {
-    logWithTime(`🔥 [DISCARD] handleDiscard関数が呼ばれました！`);
+    const roomId = gameState.gameId || socket.gameId;
+    logWithTime(`🔥 [DISCARD] handleDiscard関数が呼ばれました！`, roomId);
     console.log(`🔍 [DEBUG] handleDiscard called`);
     console.log(`🔍 [DEBUG] currentPlayer: ${gameState.currentPlayer}`);
     console.log(`🔍 [DEBUG] data:`, data);
@@ -470,7 +565,7 @@ function handleDiscard(socket, gameState, data) {
     console.log(`🔄 [DEBUG] プレイヤー変更: ${oldPlayer} → ${gameState.currentPlayer}`);
     console.log(`🔍 [DEBUG] 次のプレイヤータイプ: ${gameState.players[gameState.currentPlayer].type}`);
     
-    // メルド後の捨て牌の場合、CPU自動モードを再開
+    // 捨て牌後、CPU自動モードを再開（メルド機会がない場合）
     if (gameState.phase === 'discard') {
       gameState.phase = 'playing';
       gameState.cpuAutoMode = true;
@@ -481,6 +576,28 @@ function handleDiscard(socket, gameState, data) {
         logWithTime(`🤖 [AUTO RESTART] CPU自動対戦を再開します`);
         startCpuAutoGame(socket.gameId);
       }, 1000);
+    } else {
+      // 通常の捨て牌後もCPU自動モードを再開（ただし、メルド機会チェック後に判断）
+      logWithTime(`🔄 [TURN] 通常捨て牌完了 - メルド機会チェック後にCPU自動再開予定`);
+      
+      // メルド機会がなければCPU自動を再開
+      setTimeout(() => {
+        if (gameState.cpuAutoMode === false) {
+          // メルド機会で停止していた場合のみ条件確認
+          const hasActiveMeldOpportunity = checkIfMeldOpportunityActive(gameState);
+          if (!hasActiveMeldOpportunity) {
+            gameState.cpuAutoMode = true;
+            logWithTime(`🤖 [AUTO RESTART] メルド機会終了 - CPU自動対戦を再開します`);
+            startCpuAutoGame(socket.gameId);
+          }
+        } else {
+          // 既にCPU自動が有効な場合は継続
+          logWithTime(`🤖 [AUTO CONTINUE] CPU自動対戦を継続します`);
+          if (!isCpuAutoRunning(socket.gameId)) {
+            startCpuAutoGame(socket.gameId);
+          }
+        }
+      }, 500);
     }
     
     games.set(socket.gameId, gameState);
@@ -1581,7 +1698,8 @@ function handleRiichi(socket, gameState, data) {
 
 // メルド可能性チェック関数
 function checkMeldOpportunities(socket, gameState, discardedTile, discardPlayerId) {
-  logWithTime(`🔍 [MELD CHECK] メルド可能性チェック開始: ${discardedTile.displayName || discardedTile.unicode}`);
+  const roomId = gameState.gameId || socket.gameId;
+  logWithTime(`🔍 [MELD CHECK] メルド可能性チェック開始: ${discardedTile.displayName || discardedTile.unicode}`, roomId);
   
   const meldOpportunities = [];
   
@@ -1622,14 +1740,14 @@ function checkMeldOpportunities(socket, gameState, discardedTile, discardPlayerI
     // ポン・カンチェック（全プレイヤー対象）
     const sameTypeCount = player.hand.tiles.filter(tile => isSameTileType(tile, discardedTile)).length;
     if (sameTypeCount >= 2) {
-      const shouldPon = player.type === 'cpu' ? shouldCpuCallPon(player, discardedTile, gameState) : true;
+      const shouldPon = player.type === 'cpu' ? shouldCpuCallMeld(player, 'pon', discardedTile, gameState) : true;
       if (shouldPon) {
         opportunities.pon = true;
         logWithTime(`✅ [PON] プレイヤー${i}がポン可能: ${discardedTile.displayName}`);
       }
     }
     if (sameTypeCount >= 3) {
-      const shouldKan = player.type === 'cpu' ? shouldCpuCallKan(player, discardedTile, gameState) : true;
+      const shouldKan = player.type === 'cpu' ? shouldCpuCallMeld(player, 'kan', discardedTile, gameState) : true;
       if (shouldKan) {
         opportunities.kan = true;
         logWithTime(`✅ [KAN] プレイヤー${i}がカン可能: ${discardedTile.displayName}`);
@@ -1642,7 +1760,7 @@ function checkMeldOpportunities(socket, gameState, discardedTile, discardPlayerI
       // 数牌の場合のみチー可能
       const chiPossible = checkChiPossibility(player.hand.tiles, discardedTile);
       if (chiPossible) {
-        const shouldChi = player.type === 'cpu' ? shouldCpuCallChi(player, discardedTile, gameState) : true;
+        const shouldChi = player.type === 'cpu' ? shouldCpuCallMeld(player, 'chi', discardedTile, gameState) : true;
         if (shouldChi) {
           opportunities.chi = true;
           logWithTime(`✅ [CHI] プレイヤー${i}がチー可能: ${discardedTile.displayName}`);
@@ -1680,6 +1798,18 @@ function checkMeldOpportunities(socket, gameState, discardedTile, discardPlayerI
   } else {
     logWithTime(`❌ [MELD CHECK] メルド機会なし`);
   }
+}
+
+// メルド機会が現在アクティブかチェック
+function checkIfMeldOpportunityActive(gameState) {
+  // 簡単な判定：最後の捨て牌から一定時間経過したか、メルド待ちフラグがあるか
+  return false; // 実装簡素化：常にfalse（メルド機会は短時間で終了と仮定）
+}
+
+// CPU自動が現在実行中かチェック
+function isCpuAutoRunning(gameId) {
+  // 実装簡素化：startCpuAutoGameで管理されるため、常にfalse
+  return false;
 }
 
 // チー可能性チェック
@@ -1727,7 +1857,123 @@ function handleDraw(socket, gameState, data) {
     io.to(socket.gameId).emit('gameState', gameState);
     
     console.log(`🎯 プレイヤー${gameState.currentPlayer}が牌を引きました: ${drawnTile.displayName || drawnTile.unicode}`);
+  } else {
+    // 牌が尽きた場合は流局処理
+    logWithTime(`🌊 [RYUKYOKU] 牌が尽きたため流局`);
+    handleRyukyoku(socket, gameState);
   }
+}
+
+// 流局処理
+function handleRyukyoku(socket, gameState) {
+  logWithTime(`🌊 [RYUKYOKU] 流局処理開始`);
+  
+  // テンパイ判定
+  const tempaiiPlayers = [];
+  const notenPlayers = [];
+  
+  for (let i = 0; i < 4; i++) {
+    const player = gameState.players[i];
+    const isTemplaii = checkTempai(player.hand.tiles, player.hand.melds);
+    
+    if (isTemplaii) {
+      tempaiiPlayers.push(i);
+      logWithTime(`✅ [TEMPAI] プレイヤー${i}(${player.name}): テンパイ`);
+    } else {
+      notenPlayers.push(i);
+      logWithTime(`❌ [NOTEN] プレイヤー${i}(${player.name}): ノーテン`);
+    }
+  }
+  
+  // ノーテン罰符の計算と支払い
+  if (tempaiiPlayers.length > 0 && notenPlayers.length > 0) {
+    const totalPenalty = 3000;
+    const penaltyPerNoten = Math.floor(totalPenalty / notenPlayers.length);
+    const bonusPerTempai = Math.floor(totalPenalty / tempaiiPlayers.length);
+    
+    // ノーテン者から徴収
+    notenPlayers.forEach(playerId => {
+      gameState.players[playerId].score -= penaltyPerNoten;
+      logWithTime(`💰 [NOTEN PENALTY] プレイヤー${playerId}: -${penaltyPerNoten}点`);
+    });
+    
+    // テンパイ者に支払い
+    tempaiiPlayers.forEach(playerId => {
+      gameState.players[playerId].score += bonusPerTempai;
+      logWithTime(`💰 [TEMPAI BONUS] プレイヤー${playerId}: +${bonusPerTempai}点`);
+    });
+  }
+  
+  // 親の連荘・流れ判定
+  const dealerIsTempai = tempaiiPlayers.includes(gameState.dealer);
+  const isRenchan = dealerIsTempai;
+  
+  if (isRenchan) {
+    // 親がテンパイの場合は連荘
+    logWithTime(`🔄 [RENCHAN] 親がテンパイのため連荘`);
+    gameState.honba++; // 本場数を増やす
+  } else {
+    // 親がノーテンの場合は親流れ
+    logWithTime(`👑 [DEALER CHANGE] 親がノーテンのため親流れ`);
+    gameState.dealer = (gameState.dealer + 1) % 4;
+    gameState.roundNumber++;
+    gameState.honba++; // 流局でも本場は増える（流れ本場）
+    
+    // 風牌の更新
+    updatePlayerWinds(gameState);
+  }
+  
+  // リーチ棒は次局に持ち越し（クリアしない）
+  logWithTime(`🎯 [KYOTAKU] リーチ棒${gameState.kyotaku}本は次局に持ち越し`);
+  
+  // 流局結果をクライアントに送信
+  const ryukyokuResult = {
+    type: 'ryukyoku',
+    tempaiiPlayers: tempaiiPlayers,
+    notenPlayers: notenPlayers,
+    isRenchan: isRenchan,
+    newDealer: gameState.dealer,
+    honba: gameState.honba,
+    scores: gameState.players.map(p => p.score)
+  };
+  
+  io.to(socket.gameId).emit('roundResult', ryukyokuResult);
+  
+  // ゲーム終了判定
+  if (checkGameEnd(gameState)) {
+    logWithTime(`🎊 [GAME END] ゲーム終了`);
+    finishGame(socket, gameState);
+  } else {
+    // 次局開始（少し遅延を入れる）
+    setTimeout(() => {
+      logWithTime(`🆕 [NEW ROUND] 次局開始: ${gameState.wind}${gameState.roundNumber}局${gameState.honba}本場`);
+      startNewRound(socket, gameState);
+    }, 3000);
+  }
+}
+
+// テンパイ判定（簡易版）
+function checkTempai(handTiles, melds = []) {
+  // 13枚でない場合はテンパイではない（通常は14枚だが、捨て牌前の状態）
+  if (handTiles.length !== 13) {
+    return false;
+  }
+  
+  // 簡易的な判定：1シャンテンかどうかをチェック
+  // 実際の実装では、各牌を仮想的に加えて和了形になるかチェック
+  
+  // 牌の種類ごとに分類
+  const tileCounts = {};
+  handTiles.forEach(tile => {
+    const key = `${tile.suit}_${tile.rank}_${tile.honor}`;
+    tileCounts[key] = (tileCounts[key] || 0) + 1;
+  });
+  
+  // 対子（雀頭）候補の数をチェック
+  const pairs = Object.values(tileCounts).filter(count => count >= 2).length;
+  
+  // 簡易判定：対子があれば一応テンパイの可能性ありとする
+  return pairs > 0;
 }
 
 // CPU自動対戦実行
@@ -1740,20 +1986,20 @@ function startCpuAutoGame(gameId) {
   }
   
   const cpuTurn = () => {
-    console.log(`🤖 [DEBUG] cpuTurn called`);
+    logWithTime(`🤖 [DEBUG] cpuTurn called`, gameId);
     
     if (!games.has(gameId)) {
-      console.log(`🤖 [DEBUG] ゲームが存在しません: ${gameId}`);
+      logWithTime(`🤖 [DEBUG] ゲームが存在しません: ${gameId}`, gameId);
       return;
     }
     
     const currentState = games.get(gameId);
     if (!currentState.cpuAutoMode) {
-      console.log(`🤖 [DEBUG] CPU自動モードが停止されました`);
+      logWithTime(`🤖 [DEBUG] CPU自動モードが停止されました`, gameId);
       return;
     }
     
-    console.log(`🤖 [DEBUG] currentPlayer: ${currentState.currentPlayer}`);
+    logWithTime(`🤖 [DEBUG] currentPlayer: ${currentState.currentPlayer}`, gameId);
     
     // 14枚持っているCPUプレイヤーを検索（緊急時の補正）
     for (let i = 0; i < 4; i++) {
@@ -1766,19 +2012,19 @@ function startCpuAutoGame(gameId) {
     }
     
     const currentPlayer = currentState.players[currentState.currentPlayer];
-    console.log(`🤖 [DEBUG] currentPlayer type: ${currentPlayer.type}`);
-    console.log(`🤖 [DEBUG] currentPlayer name: ${currentPlayer.name}`);
-    console.log(`🤖 [DEBUG] currentPlayer tiles count: ${currentPlayer.hand.tiles.length}`);
+    logWithTime(`🤖 [DEBUG] currentPlayer type: ${currentPlayer.type}`, gameId);
+    logWithTime(`🤖 [DEBUG] currentPlayer name: ${currentPlayer.name}`, gameId);
+    logWithTime(`🤖 [DEBUG] currentPlayer tiles count: ${currentPlayer.hand.tiles.length}`, gameId);
     
     // プレイヤータイプに関係なく、手牌が適切な枚数の場合は自動ツモ
     // 基本は13枚だが、メルドがある場合は減る（3枚メルド1個につき-3枚）
     const meldCount = currentPlayer.hand.melds ? currentPlayer.hand.melds.length : 0;
     const expectedTileCount = 13 - (meldCount * 3);
     
-    console.log(`🔍 [MELD DEBUG] プレイヤー${currentState.currentPlayer}: メルド数=${meldCount}, 期待手牌数=${expectedTileCount}, 実際手牌数=${currentPlayer.hand.tiles.length}`);
+    logWithTime(`🔍 [MELD DEBUG] プレイヤー${currentState.currentPlayer}: メルド数=${meldCount}, 期待手牌数=${expectedTileCount}, 実際手牌数=${currentPlayer.hand.tiles.length}`, gameId);
     
     if (currentPlayer.hand.tiles.length === expectedTileCount) {
-      console.log(`🎯 [DEBUG] プレイヤー${currentState.currentPlayer}(${currentPlayer.type})が自動ツモを実行（現在${currentPlayer.hand.tiles.length}枚）`);
+      logWithTime(`🎯 [DEBUG] プレイヤー${currentState.currentPlayer}(${currentPlayer.type})が自動ツモを実行（現在${currentPlayer.hand.tiles.length}枚）`, gameId);
       if (currentState.wallTiles.length > 0) {
         const drawnTile = currentState.wallTiles.pop();
         currentPlayer.hand.tiles.push(drawnTile);
@@ -1835,15 +2081,29 @@ function startCpuAutoGame(gameId) {
           handleDiscard({ gameId }, currentState, { tileId: tileToDiscard.id });
         }, 800);
       } else {
-        console.log(`👤 [DEBUG] 人間プレイヤーのターン（手牌${currentPlayer.hand.tiles.length}枚）- 捨て牌待ち`);
+        logWithTime(`👤 [DEBUG] 人間プレイヤーのターン（手牌${currentPlayer.hand.tiles.length}枚）- 捨て牌待ち`, gameId);
+        // 人間プレイヤーの場合は次のターンをスケジュールしない（手動で捨て牌するまで待機）
+        // ただし、人間プレイヤーのターンでもCPU自動は停止させない（メルド機会がある時のみ停止）
+        logWithTime(`👤 [DEBUG] 人間プレイヤーのターン - CPU自動は継続待機中`, gameId);
+        
+        // 人間プレイヤーが捨て牌するまで一定間隔で状態をチェック
+        setTimeout(() => {
+          // ゲーム状態を再確認して、まだ同じプレイヤーのターンなら継続待機
+          const currentState = games.get(gameId);
+          if (currentState && currentState.cpuAutoMode && currentState.currentPlayer === currentPlayer.playerId) {
+            // まだ同じ人間プレイヤーのターンなら再度チェック
+            cpuTurn();
+          }
+        }, 2000); // 2秒後に再チェック
+        return;
       }
     }
     
-    // 次のターンをスケジュール
+    // CPUプレイヤーの場合のみ次のターンをスケジュール
     setTimeout(cpuTurn, currentState.cpuAutoSpeed || 1000);
   };
   
-  console.log(`🤖 [DEBUG] 最初のCPUターンをスケジュール（${gameState.cpuAutoSpeed || 1000}ms後）`);
+  logWithTime(`🤖 [DEBUG] 最初のCPUターンをスケジュール（${gameState.cpuAutoSpeed || 1000}ms後）`, gameId);
   setTimeout(cpuTurn, gameState.cpuAutoSpeed || 1000);
 }
 
@@ -1882,22 +2142,192 @@ function selectBestDiscardTile(player, gameState) {
 function evaluateDiscardTile(tile, handTiles, player, gameState) {
   let score = 0;
   
+  // キャラクター特性を取得
+  const character = CPU_CHARACTERS.find(c => c.name === player.name) || CPU_CHARACTERS[0];
+  const priority = character.priority;
+  const behavior = character.behavior;
+  
   // 1. 孤立牌の優先度を上げる（捨てやすい）
-  score += evaluateIsolationValue(tile, handTiles) * 100;
+  score += evaluateIsolationValue(tile, handTiles) * (100 * priority.efficiency / 10);
   
   // 2. 危険牌の評価（他プレイヤーに当たりやすい牌は避ける）
-  score += evaluateDangerLevel(tile, gameState) * 50;
+  const dangerWeight = behavior.dangerAvoidance * priority.safety * 50;
+  score += evaluateDangerLevel(tile, gameState) * dangerWeight;
   
   // 3. 手牌効率の評価（面子構成に不要な牌）
-  score += evaluateHandEfficiency(tile, handTiles) * 80;
+  score += evaluateHandEfficiency(tile, handTiles) * (80 * priority.efficiency / 10);
   
   // 4. 字牌の評価
-  score += evaluateHonorTiles(tile, player, gameState) * 60;
+  score += evaluateHonorTiles(tile, player, gameState) * (60 * priority.yaku / 10);
   
   // 5. ドラの評価（ドラは基本的に残したい）
-  score += evaluateDoraValue(tile, gameState) * -150;
+  const doraWeight = -150 * (priority.yaku + priority.efficiency) / 20;
+  score += evaluateDoraValue(tile, gameState) * doraWeight;
+  
+  // 6. キャラクター特性による調整
+  score = applyCharacterPersonality(score, tile, handTiles, player, gameState, character);
   
   return score;
+}
+
+// キャラクター特性による戦略調整
+function applyCharacterPersonality(score, tile, handTiles, player, gameState, character) {
+  const priority = character.priority;
+  const behavior = character.behavior;
+  
+  // 安全性重視キャラクター（守備の武、職人のイチローなど）
+  if (priority.safety >= 8) {
+    // 現物牌を最優先
+    if (isGenbutsuTile(tile, gameState)) {
+      score += 500; // 大幅に優先度アップ
+    }
+    // リーチ者がいる場合、危険牌は絶対避ける
+    if (hasRiichiPlayer(gameState) && isDangerousTile(tile, gameState)) {
+      score -= 1000; // 大幅に優先度ダウン
+    }
+  }
+  
+  // 攻撃性重視キャラクター（攻撃の明、ギャンブラーの蘭など）
+  if (priority.aggression >= 8) {
+    // 危険牌でも役作りのためなら切る
+    if (isYakuRelatedTile(tile, handTiles)) {
+      score -= 200; // 役に関連する牌は残したい
+    }
+    // ドラ単騎待ちなどを狙う
+    if (isDoraRelated(tile, gameState)) {
+      score -= 300;
+    }
+  }
+  
+  // 効率重視キャラクター（研究者の賢治、AI-ZEROなど）
+  if (priority.efficiency >= 9) {
+    // 牌効率を最優先（シャンテン数を考慮）
+    const efficiencyBonus = calculateTileEfficiency(tile, handTiles);
+    score += efficiencyBonus * 100;
+  }
+  
+  // 役重視キャラクター（役師の花、門前の弘治など）
+  if (priority.yaku >= 8) {
+    // 特定の役を狙いやすくする
+    if (character.name === '門前の弘治' && hasMeldedTiles(player)) {
+      // 門前役を狙うキャラは鳴きを嫌う
+      score -= 200;
+    }
+    if (character.name === '役師の花' && isHighScoringYakuPossible(handTiles)) {
+      // 高得点役の可能性がある牌は残す
+      score -= 300;
+    }
+  }
+  
+  // スピード重視キャラクター（スピードの雪など）
+  if (priority.speed >= 8) {
+    // テンパイに近づく牌を優先
+    if (isTempaiBuildingTile(tile, handTiles)) {
+      score -= 150;
+    }
+  }
+  
+  return score;
+}
+
+// ヘルパー関数群
+function isGenbutsuTile(tile, gameState) {
+  // 現物判定の簡易実装
+  return gameState.players.some(p => 
+    p.hand.discards.some(d => isSameTileType(d, tile))
+  );
+}
+
+function hasRiichiPlayer(gameState) {
+  return gameState.players.some(p => p.hand.riichi);
+}
+
+function isDangerousTile(tile, gameState) {
+  // 危険牌判定の簡易実装
+  return false; // 実装簡素化
+}
+
+function isYakuRelatedTile(tile, handTiles) {
+  // 役に関連する牌の判定
+  return false; // 実装簡素化
+}
+
+function isDoraRelated(tile, gameState) {
+  // ドラ関連の判定
+  return gameState.dora && isSameTileType(tile, gameState.dora);
+}
+
+function calculateTileEfficiency(tile, handTiles) {
+  // 牌効率計算の簡易実装
+  return Math.random() * 10; // 実装簡素化
+}
+
+function hasMeldedTiles(player) {
+  return player.hand.melds && player.hand.melds.length > 0;
+}
+
+function isHighScoringYakuPossible(handTiles) {
+  // 高得点役の可能性判定
+  return false; // 実装簡素化
+}
+
+function isTempaiBuildingTile(tile, handTiles) {
+  // テンパイ構築に有効な牌の判定
+  return false; // 実装簡素化
+}
+
+// CPU鳴き判定（キャラクター特性考慮）
+function shouldCpuCallMeld(player, meldType, discardedTile, gameState) {
+  const character = CPU_CHARACTERS.find(c => c.name === player.name) || CPU_CHARACTERS[0];
+  const behavior = character.behavior;
+  const priority = character.priority;
+  
+  // 基本鳴き頻度をベースに判定
+  const baseProbability = behavior.meldFrequency;
+  let adjustedProbability = baseProbability;
+  
+  // キャラクター特性による調整
+  switch (meldType) {
+    case 'chi':
+      // チーは効率重視なら積極的
+      if (priority.efficiency >= 8) adjustedProbability += 0.2;
+      // 門前重視なら消極的
+      if (character.name === '門前の弘治') adjustedProbability -= 0.8;
+      // スピード重視なら積極的
+      if (priority.speed >= 8) adjustedProbability += 0.3;
+      break;
+      
+    case 'pon':
+      // 役重視なら状況次第で積極的
+      if (priority.yaku >= 8) adjustedProbability += 0.1;
+      // 安全重視なら消極的（手牌が見える）
+      if (priority.safety >= 8) adjustedProbability -= 0.2;
+      break;
+      
+    case 'kan':
+      // 攻撃的なキャラは積極的
+      if (priority.aggression >= 8) adjustedProbability += 0.2;
+      // 安全重視は消極的
+      if (priority.safety >= 8) adjustedProbability -= 0.3;
+      break;
+  }
+  
+  // ゲーム状況による調整
+  if (hasRiichiPlayer(gameState)) {
+    // リーチ者がいる場合
+    if (priority.safety >= 7) {
+      adjustedProbability -= 0.4; // 安全重視は鳴きを控える
+    } else if (priority.aggression >= 8) {
+      adjustedProbability += 0.1; // 攻撃的は構わず鳴く
+    }
+  }
+  
+  // 確率で判定
+  const shouldMeld = Math.random() < Math.max(0, Math.min(1, adjustedProbability));
+  
+  logWithTime(`🧠 [CPU MELD] ${player.name}: ${meldType} 判定=${shouldMeld} (確率:${adjustedProbability.toFixed(2)})`);
+  
+  return shouldMeld;
 }
 
 // 孤立牌の評価（周囲に関連牌がない牌は捨てやすい）
@@ -2346,7 +2776,7 @@ function startNewRound(socket, gameState) {
   
   // CPU自動モードを再開
   gameState.cpuAutoMode = true;
-  startCpuAutoGame(gameState, socket.gameId);
+  startCpuAutoGame(socket.gameId);
 }
 
 // ゲーム終了処理
@@ -2379,6 +2809,452 @@ function finishGame(socket, gameState) {
   io.to(socket.gameId).emit('gameState', gameState);
   io.to(socket.gameId).emit('gameEnd', gameEndData);
 }
+
+// =====================
+// オンライン麻雀関数群
+// =====================
+
+// 部屋作成
+function createRoom(roomId, roomName, ownerName) {
+  const room = {
+    id: roomId,
+    name: roomName,
+    status: ROOM_STATUS.WAITING,
+    owner: ownerName,
+    created: new Date().toISOString(),
+    players: [
+      {
+        id: generateUserId(),
+        name: ownerName,
+        type: 'human',
+        socketId: null,
+        ready: false,
+        position: 0
+      }
+    ],
+    gameState: null
+  };
+  
+  // 人間プレイヤーが2人未満の場合、CPUを自動追加
+  fillRoomWithCPU(room);
+  
+  rooms.set(roomId, room);
+  console.log(`🏠 [ROOM CREATED] 部屋 "${roomName}" (ID: ${roomId}) が作成されました`);
+  
+  return room;
+}
+
+// CPUで部屋を埋める
+function fillRoomWithCPU(room) {
+  const humanCount = room.players.filter(p => p.type === 'human').length;
+  const cpuNeeded = 4 - room.players.length;
+  
+  for (let i = 0; i < cpuNeeded; i++) {
+    const cpuChar = CPU_CHARACTERS[i % CPU_CHARACTERS.length];
+    const cpuPlayer = {
+      id: `cpu_${Date.now()}_${i}`,
+      name: cpuChar.name,
+      type: 'cpu',
+      personality: cpuChar.personality,
+      description: cpuChar.description,
+      socketId: null,
+      ready: true,
+      position: room.players.length
+    };
+    
+    room.players.push(cpuPlayer);
+    console.log(`🤖 [CPU ADDED] ${cpuChar.name} (${cpuChar.personality}) が部屋に参加`);
+  }
+}
+
+// ユーザーID生成
+function generateUserId() {
+  return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+// 部屋参加
+function joinRoom(roomId, playerName, socketId) {
+  const room = rooms.get(roomId);
+  if (!room) {
+    return { success: false, message: '部屋が見つかりません' };
+  }
+  
+  if (room.status !== ROOM_STATUS.WAITING) {
+    return { success: false, message: '部屋がゲーム中または終了しています' };
+  }
+  
+  const humanPlayers = room.players.filter(p => p.type === 'human');
+  if (humanPlayers.length >= 4) {
+    return { success: false, message: '部屋が満室です' };
+  }
+  
+  // 既存の人間プレイヤーを確認
+  const existingPlayer = room.players.find(p => p.name === playerName && p.type === 'human');
+  if (existingPlayer) {
+    // 再接続の場合
+    existingPlayer.socketId = socketId;
+    console.log(`🔄 [RECONNECT] ${playerName} が部屋 ${roomId} に再接続`);
+  } else {
+    // 新規参加の場合、CPUを1人削除して人間プレイヤーを追加
+    const cpuIndex = room.players.findIndex(p => p.type === 'cpu');
+    if (cpuIndex !== -1) {
+      const removedCpu = room.players.splice(cpuIndex, 1)[0];
+      console.log(`🤖 [CPU REMOVED] ${removedCpu.name} が部屋から退出`);
+    }
+    
+    const newPlayer = {
+      id: generateUserId(),
+      name: playerName,
+      type: 'human',
+      socketId: socketId,
+      ready: false,
+      position: room.players.length
+    };
+    
+    room.players.push(newPlayer);
+    console.log(`👤 [PLAYER JOINED] ${playerName} が部屋 ${roomId} に参加`);
+  }
+  
+  return { success: true, room: room };
+}
+
+// プレイヤー準備完了
+function setPlayerReady(roomId, socketId, ready) {
+  const room = rooms.get(roomId);
+  if (!room) return false;
+  
+  const player = room.players.find(p => p.socketId === socketId);
+  if (!player) return false;
+  
+  player.ready = ready;
+  console.log(`✅ [READY] ${player.name} の準備状態: ${ready ? '完了' : '未完了'}`);
+  
+  // 全人間プレイヤーが準備完了かチェック
+  const humanPlayers = room.players.filter(p => p.type === 'human');
+  const allReady = humanPlayers.every(p => p.ready);
+  
+  if (allReady && humanPlayers.length >= 1) {
+    startRoomGame(room);
+  }
+  
+  return true;
+}
+
+// 親決め（起家決め）- 2回のサイコロで決定
+function determineInitialDealer(players) {
+  logWithTime(`🎲 [DEALER SELECTION] 親決めを開始`);
+  
+  // 第1回目のサイコロ（仮東の人が振る）
+  const firstRoll = Math.floor(Math.random() * 6) + 1 + Math.floor(Math.random() * 6) + 1;
+  const secondRoller = (firstRoll - 1) % 4;
+  logWithTime(`🎲 [DICE 1] 第1回サイコロ: ${firstRoll} → プレイヤー${secondRoller}が第2回を振る`);
+  
+  // 第2回目のサイコロ（決まったプレイヤーが振る）
+  const secondRoll = Math.floor(Math.random() * 6) + 1 + Math.floor(Math.random() * 6) + 1;
+  const dealer = (secondRoller + secondRoll - 1) % 4;
+  logWithTime(`🎲 [DICE 2] 第2回サイコロ: ${secondRoll} → プレイヤー${dealer}が起家に決定`);
+  
+  return dealer;
+}
+
+// 起家基準で風牌を設定
+function updatePlayerWindsForDealer(players, dealer) {
+  const winds = ['east', 'south', 'west', 'north'];
+  const windNames = ['東', '南', '西', '北'];
+  for (let i = 0; i < 4; i++) {
+    const windIndex = (i - dealer + 4) % 4;
+    players[i].wind = winds[windIndex];
+    logWithTime(`🀄 [WIND] プレイヤー${i}: ${windNames[windIndex]}家`);
+  }
+}
+
+// オンライン麻雀用のゲーム状態初期化
+function initializeGameState(players) {
+  const tiles = createTiles();
+  
+  // シャッフル
+  for (let i = tiles.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+  }
+  
+  // 親決め（起家決め）
+  const dealer = determineInitialDealer(players);
+  logWithTime(`🎲 [DEALER SELECTION] 親決め結果: プレイヤー${dealer}(${players[dealer].name})が起家`);
+  
+  // プレイヤー情報を変換
+  const gamePlayers = players.map((player, index) => ({
+    id: index,
+    name: player.name,
+    type: player.type, // プレイヤータイプを追加
+    isCPU: player.type === 'cpu',
+    cpuPersonality: player.personality || null,
+    score: 25000,
+    wind: 'east', // 後でupdatePlayerWindsForDealerで正しく設定
+    hand: {
+      tiles: [],
+      discards: [],
+      melds: [],
+      riichi: false
+    }
+  }));
+  
+  // 配牌（親から順番に）
+  for (let i = 0; i < 4; i++) {
+    const playerIndex = (dealer + i) % 4;
+    const tileCount = i === 0 ? 14 : 13; // 親は14枚
+    gamePlayers[playerIndex].hand.tiles = sortHand(tiles.splice(0, tileCount));
+  }
+  
+  // 風牌を正しく設定
+  updatePlayerWindsForDealer(gamePlayers, dealer);
+  
+  return {
+    gameId: null, // 後で設定
+    phase: 'playing',
+    currentPlayer: dealer,
+    dealer: dealer,
+    wind: '東',
+    roundNumber: 1,
+    honba: 0,
+    riichi: 0,
+    players: gamePlayers,
+    wallTiles: tiles,
+    remainingTiles: tiles.length,
+    dora: tiles[0] || null,
+    lastDiscard: null,
+    lastDiscardPlayer: null,
+    roundResults: [],
+    gameType: 'online'
+  };
+}
+
+// 部屋でゲーム開始
+function startRoomGame(room) {
+  room.status = ROOM_STATUS.PLAYING;
+  
+  // ゲーム状態を初期化
+  const gameState = initializeGameState(room.players);
+  gameState.gameId = room.id;
+  gameState.cpuAutoMode = true; // CPU自動モードを有効にする
+  gameState.cpuAutoSpeed = 1000; // 1秒間隔で自動実行
+  room.gameState = gameState;
+  
+  // gamesマップにも追加（既存システムとの互換性のため）
+  games.set(room.id, gameState);
+  
+  logWithTime(`🎮 [GAME START] ゲーム開始`, room.id);
+  
+  // 全プレイヤーにゲーム開始を通知
+  room.players.forEach(player => {
+    if (player.socketId) {
+      const socket = io.sockets.sockets.get(player.socketId);
+      if (socket) {
+        socket.gameId = room.id;
+        socket.emit('gameState', gameState);
+      }
+    }
+  });
+  
+  // CPU自動実行開始
+  console.log(`🔍 [DEBUG] room.id type: ${typeof room.id}, value: ${room.id}`);
+  startCpuAutoGame(room.id);
+}
+
+// Socket.IO統合イベントハンドラー
+io.on('connection', (socket) => {
+  console.log(`🔌 [CONNECT] ユーザー接続: ${socket.id}`);
+  
+  // 基本的な接続イベント
+  socket.on('disconnect', () => {
+    console.log(`🔌 [DISCONNECT] ユーザー切断: ${socket.id}`);
+    
+    // 部屋からプレイヤーを削除（またはオフライン状態に）
+    for (const [roomId, room] of rooms.entries()) {
+      const player = room.players.find(p => p.socketId === socket.id);
+      if (player) {
+        player.socketId = null;
+        console.log(`👤 [OFFLINE] ${player.name} がオフラインになりました`);
+        
+        // 必要に応じて部屋の状態を更新
+        if (room.status === ROOM_STATUS.WAITING) {
+          io.to(roomId).emit('roomUpdate', { room: room });
+        }
+      }
+    }
+  });
+  
+  socket.on('ping', () => {
+    socket.emit('pong');
+  });
+
+  // オンライン麻雀 - 部屋作成
+  socket.on('createRoom', (data) => {
+    console.log(`🏠 [CREATE ROOM] 部屋作成要求:`, data);
+    const { roomName, playerName } = data;
+    
+    if (!roomName || !playerName) {
+      console.log(`❌ [ERROR] 部屋作成失敗: 必要なデータが不足`);
+      socket.emit('joinError', { message: '部屋名とプレイヤー名が必要です' });
+      return;
+    }
+    
+    const roomId = (roomIdCounter.current++).toString();
+    const room = createRoom(roomId, roomName, playerName);
+    
+    // 作成者を部屋に参加させる
+    const joinResult = joinRoom(roomId, playerName, socket.id);
+    if (joinResult.success) {
+      socket.join(roomId);
+      console.log(`✅ [SUCCESS] 部屋作成成功: ${roomId}`);
+      socket.emit('roomCreated', { room: joinResult.room });
+      socket.to(roomId).emit('roomUpdate', { room: joinResult.room });
+    } else {
+      console.log(`❌ [ERROR] 部屋参加失敗:`, joinResult.message);
+      socket.emit('joinError', { message: joinResult.message });
+    }
+  });
+  
+  // オンライン麻雀 - 部屋参加
+  socket.on('joinRoom', (data) => {
+    console.log(`🚪 [JOIN ROOM] 部屋参加要求:`, data);
+    const { roomId, playerName } = data;
+    const result = joinRoom(roomId, playerName, socket.id);
+    
+    if (result.success) {
+      socket.join(roomId);
+      console.log(`✅ [SUCCESS] 部屋参加成功: ${playerName} → ${roomId}`);
+      socket.emit('roomJoined', { room: result.room });
+      socket.to(roomId).emit('roomUpdate', { room: result.room });
+    } else {
+      console.log(`❌ [ERROR] 部屋参加失敗:`, result.message);
+      socket.emit('joinError', { message: result.message });
+    }
+  });
+  
+  // オンライン麻雀 - 準備完了
+  socket.on('playerReady', (data) => {
+    console.log(`✅ [READY] 準備状態変更:`, data);
+    console.log(`🔍 [DEBUG] socket.id: ${socket.id}, rooms count: ${rooms.size}`);
+    const { roomId, ready } = data;
+    const result = setPlayerReady(roomId, socket.id, ready);
+    console.log(`🔍 [DEBUG] setPlayerReady result: ${result}`);
+    if (result) {
+      const room = rooms.get(roomId);
+      console.log(`🔍 [DEBUG] Emitting roomUpdate for room ${roomId}`);
+      io.to(roomId).emit('roomUpdate', { room: room });
+    }
+  });
+  
+  // オンライン麻雀 - 部屋一覧要求
+  socket.on('getRooms', () => {
+    console.log(`📋 [GET ROOMS] 部屋一覧要求`);
+    const roomList = Array.from(rooms.values())
+      .filter(room => room.status === ROOM_STATUS.WAITING)
+      .map(room => ({
+        id: room.id,
+        name: room.name,
+        playerCount: room.players.filter(p => p.type === 'human').length,
+        maxPlayers: 4,
+        created: room.created
+      }));
+    
+    console.log(`📋 [ROOM LIST] 送信する部屋数: ${roomList.length}`);
+    socket.emit('roomList', { rooms: roomList });
+  });
+
+  // =====================================
+  // 既存ゲームロジックのイベントハンドラー
+  // =====================================
+  
+  // ゲーム作成（既存システム用）
+  socket.on('createGame', (data) => {
+    const gameId = 'game_' + Date.now();
+    const gameState = createGameState(gameId);
+    games.set(gameId, gameState);
+    
+    socket.join(gameId);
+    socket.gameId = gameId;
+    
+    console.log(`🎮 新しいゲームを作成: ${gameId}`);
+    socket.emit('gameCreated', { gameId: gameId });
+    socket.emit('gameState', gameState);
+  });
+  
+  // ゲーム状態要求
+  socket.on('requestGameState', () => {
+    if (socket.gameId && games.has(socket.gameId)) {
+      const gameState = games.get(socket.gameId);
+      socket.emit('gameState', gameState);
+    }
+  });
+  
+  // 牌を引く
+  socket.on('drawTile', () => {
+    if (socket.gameId && games.has(socket.gameId)) {
+      const gameState = games.get(socket.gameId);
+      if (gameState.wallTiles.length > 0) {
+        const drawnTile = gameState.wallTiles.pop();
+        gameState.players[gameState.currentPlayer].hand.tiles.push(drawnTile);
+        gameState.remainingTiles = gameState.wallTiles.length;
+        
+        games.set(socket.gameId, gameState);
+        io.to(socket.gameId).emit('gameState', gameState);
+        
+        console.log(`🎯 プレイヤー${gameState.currentPlayer}が牌を引きました: ${drawnTile.displayName || drawnTile.unicode}`);
+      }
+    }
+  });
+
+  // メルド処理（チー・ポン・カン）
+  socket.on('meld', (data) => {
+    logWithTime('🀄 [MELD] メルド要求: ' + JSON.stringify(data));
+    if (socket.gameId && games.has(socket.gameId)) {
+      const gameState = games.get(socket.gameId);
+      handleMeld(socket, gameState, data);
+    }
+  });
+  
+  // プレイヤーアクション（統一ハンドラー）
+  socket.on('playerAction', (data) => {
+    logWithTime(`🎯 [PLAYER ACTION] 受信: ${data.type}`);
+    
+    if (!socket.gameId || !games.has(socket.gameId)) {
+      console.log(`❌ [ERROR] ゲームが見つかりません: gameId=${socket.gameId}`);
+      socket.emit('error', { message: 'ゲームが見つかりません' });
+      return;
+    }
+    
+    const gameState = games.get(socket.gameId);
+    
+    switch (data.type) {
+      case 'discard':
+        handleDiscard(socket, gameState, data);
+        break;
+      case 'draw':
+        handleDraw(socket, gameState, data);
+        break;
+      case 'chi':
+      case 'pon':
+      case 'kan':
+      case 'ankan':
+        logWithTime(`🔍 [PLAYER ACTION] メルドアクション: ${data.type}`);
+        handleMeld(socket, gameState, data);
+        break;
+      case 'riichi':
+        handleRiichi(socket, gameState, data);
+        break;
+      case 'win':
+        handleWin(socket, gameState, data);
+        break;
+      case 'pass':
+        handlePass(socket, gameState, data);
+        break;
+      default:
+        console.log(`❓ [UNKNOWN ACTION] 不明なアクション: ${data.type}`);
+    }
+  });
+});
 
 server.listen(PORT, () => {
   console.log(`🀄 麻雀ゲームサーバーがポート ${PORT} で起動しました`);
