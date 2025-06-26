@@ -13,6 +13,28 @@ const rooms = new Map(); // 部屋管理
 const users = new Map(); // ユーザー管理
 const roomIdCounter = { current: 1000 }; // 部屋ID管理
 
+// 定期的なルームクリーンアップ（5分間隔）
+setInterval(() => {
+  const now = Date.now();
+  const cleanupThreshold = 30 * 60 * 1000; // 30分
+  
+  for (const [roomId, room] of rooms.entries()) {
+    const onlinePlayers = room.players.filter(p => p.socketId !== null);
+    const roomAge = now - (room.createdAt || now);
+    
+    // 30分以上経過した空のルームを削除
+    if (onlinePlayers.length === 0 && roomAge > cleanupThreshold) {
+      logWithTime(`🗑️ [SCHEDULED CLEANUP] 古い空ルーム削除: ${roomId}`);
+      rooms.delete(roomId);
+      if (games.has(roomId)) {
+        games.delete(roomId);
+      }
+    }
+  }
+  
+  logWithTime(`🧹 [CLEANUP] アクティブルーム数: ${rooms.size}`);
+}, 5 * 60 * 1000); // 5分間隔
+
 // CPU名前とキャラクター設定（高度AI 15キャラクター）
 const CPU_CHARACTERS = [
     // 1. 守備型：安全第一
@@ -1864,6 +1886,45 @@ function handleDraw(socket, gameState, data) {
   }
 }
 
+// メルド機会をパスしてツモを実行
+function handlePass(socket, gameState, data) {
+  logWithTime(`⏩ [PASS] プレイヤー${gameState.currentPlayer}がメルド機会をパス`);
+  
+  const currentPlayer = gameState.players[gameState.currentPlayer];
+  
+  // 人間プレイヤーのみがパス可能
+  if (currentPlayer.type !== 'human') {
+    logWithTime(`❌ [PASS ERROR] CPUプレイヤーはパスできません`);
+    return;
+  }
+  
+  // 手牌数チェック：メルド後の適切な手牌数かどうか
+  const meldCount = currentPlayer.hand.melds ? currentPlayer.hand.melds.length : 0;
+  const expectedTileCount = 13 - (meldCount * 3);
+  
+  if (currentPlayer.hand.tiles.length === expectedTileCount) {
+    // ツモを実行
+    if (gameState.wallTiles.length > 0) {
+      const drawnTile = gameState.wallTiles.pop();
+      currentPlayer.hand.tiles.push(drawnTile);
+      gameState.remainingTiles = gameState.wallTiles.length;
+      
+      logWithTime(`🎯 [PASS TSUMO] プレイヤー${gameState.currentPlayer}がパス後ツモ: ${drawnTile.displayName || drawnTile.unicode}`);
+      
+      // CPU自動モードを再開
+      gameState.cpuAutoMode = true;
+      
+      games.set(socket.gameId, gameState);
+      io.to(socket.gameId).emit('gameState', gameState);
+    } else {
+      logWithTime(`❌ [PASS ERROR] 山牌が空です`);
+      handleRyukyoku(socket, gameState);
+    }
+  } else {
+    logWithTime(`❌ [PASS ERROR] 不正な手牌数: ${currentPlayer.hand.tiles.length}枚 (期待値: ${expectedTileCount}枚)`);
+  }
+}
+
 // 流局処理
 function handleRyukyoku(socket, gameState) {
   logWithTime(`🌊 [RYUKYOKU] 流局処理開始`);
@@ -2017,13 +2078,24 @@ function startCpuAutoGame(gameId) {
     logWithTime(`🤖 [DEBUG] currentPlayer tiles count: ${currentPlayer.hand.tiles.length}`, gameId);
     
     // プレイヤータイプに関係なく、手牌が適切な枚数の場合は自動ツモ
-    // 基本は13枚だが、メルドがある場合は減る（3枚メルド1個につき-3枚）
+    // ただし、人間プレイヤーがメルド機会を持っている場合は待機
     const meldCount = currentPlayer.hand.melds ? currentPlayer.hand.melds.length : 0;
     const expectedTileCount = 13 - (meldCount * 3);
     
     logWithTime(`🔍 [MELD DEBUG] プレイヤー${currentState.currentPlayer}: メルド数=${meldCount}, 期待手牌数=${expectedTileCount}, 実際手牌数=${currentPlayer.hand.tiles.length}`, gameId);
     
-    if (currentPlayer.hand.tiles.length === expectedTileCount) {
+    // 人間プレイヤーの場合、メルド機会がある時は自動ツモしない
+    let shouldAutoTsumo = currentPlayer.hand.tiles.length === expectedTileCount;
+    
+    if (currentPlayer.type === 'human' && shouldAutoTsumo) {
+      // メルド機会チェック：cpuAutoModeがfalseの場合はメルド待ち状態と判断
+      if (currentState.cpuAutoMode === false) {
+        logWithTime(`⏸️ [MELD WAIT] 人間プレイヤー${currentState.currentPlayer}はメルド機会待ちのため自動ツモを停止`, gameId);
+        shouldAutoTsumo = false;
+      }
+    }
+    
+    if (shouldAutoTsumo) {
       logWithTime(`🎯 [DEBUG] プレイヤー${currentState.currentPlayer}(${currentPlayer.type})が自動ツモを実行（現在${currentPlayer.hand.tiles.length}枚）`, gameId);
       if (currentState.wallTiles.length > 0) {
         const drawnTile = currentState.wallTiles.pop();
@@ -2037,6 +2109,8 @@ function startCpuAutoGame(gameId) {
       } else {
         console.log(`🤖 [WARNING] 山牌が空です`);
       }
+    } else if (currentPlayer.type === 'human') {
+      logWithTime(`👤 [DEBUG] 人間プレイヤーのターン（手牌${currentPlayer.hand.tiles.length}枚）- 自動ツモ待機中`, gameId);
     }
     
     // CPUプレイヤーの場合のみ自動捨て牌
@@ -2822,6 +2896,7 @@ function createRoom(roomId, roomName, ownerName) {
     status: ROOM_STATUS.WAITING,
     owner: ownerName,
     created: new Date().toISOString(),
+    createdAt: Date.now(), // クリーンアップ用タイムスタンプ
     players: [
       {
         id: generateUserId(),
@@ -2872,14 +2947,27 @@ function generateUserId() {
   return 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
+// セキュアなルームID生成
+function generateSecureRoomId() {
+  const timestamp = Date.now().toString(36);
+  const randomPart = Math.random().toString(36).substr(2, 8);
+  const extraRandom = Math.random().toString(36).substr(2, 4);
+  return `room_${timestamp}_${randomPart}_${extraRandom}`;
+}
+
 // 部屋参加
 function joinRoom(roomId, playerName, socketId) {
+  logWithTime(`🔍 [JOIN ROOM DEBUG] 部屋 ${roomId} を検索中 (総部屋数: ${rooms.size})`);
   const room = rooms.get(roomId);
   if (!room) {
+    logWithTime(`❌ [JOIN ROOM ERROR] 部屋 ${roomId} が見つかりません (現在の部屋: ${Array.from(rooms.keys()).join(', ')})`);
     return { success: false, message: '部屋が見つかりません' };
   }
   
-  if (room.status !== ROOM_STATUS.WAITING) {
+  // 既存プレイヤーの再接続かチェック
+  const existingPlayer = room.players.find(p => p.name === playerName && p.type === 'human');
+  
+  if (room.status !== ROOM_STATUS.WAITING && !existingPlayer) {
     return { success: false, message: '部屋がゲーム中または終了しています' };
   }
   
@@ -2888,12 +2976,36 @@ function joinRoom(roomId, playerName, socketId) {
     return { success: false, message: '部屋が満室です' };
   }
   
-  // 既存の人間プレイヤーを確認
-  const existingPlayer = room.players.find(p => p.name === playerName && p.type === 'human');
   if (existingPlayer) {
     // 再接続の場合
     existingPlayer.socketId = socketId;
-    console.log(`🔄 [RECONNECT] ${playerName} が部屋 ${roomId} に再接続`);
+    existingPlayer.ready = true; // 再接続時に準備完了状態にリセット
+    logWithTime(`🔄 [RECONNECT] ${playerName} が部屋 ${roomId} に再接続`);
+    
+    // ゲーム中の場合はゲーム状態も復元
+    if (room.status === ROOM_STATUS.PLAYING && games.has(roomId)) {
+      const gameState = games.get(roomId);
+      logWithTime(`🎮 [GAME STATE RESTORE] ${playerName} のゲーム状態を復元`);
+      
+      // 個別にゲーム状態を送信（再接続プレイヤーのみ）
+      // この部分は実際の実装では、ソケット接続が完了してから送信する必要があります
+      setTimeout(() => {
+        // 再接続したプレイヤーに現在のゲーム状態を送信
+        const reconnectSocket = [...io.sockets.sockets.values()].find(s => s.id === socketId);
+        if (reconnectSocket) {
+          // 再接続プレイヤーのインデックスを取得
+          const playerIndex = room.players.findIndex(p => p.name === playerName && p.type === 'human');
+          reconnectSocket.gameId = room.id;
+          reconnectSocket.playerId = playerIndex;
+          reconnectSocket.emit('gameState', {
+            ...gameState,
+            myPlayerId: playerIndex, // 自分のプレイヤーIDを追加
+            playerName: playerName
+          });
+          logWithTime(`✅ [RESTORE COMPLETE] ${playerName} (ID: ${playerIndex}) の状態復元完了`);
+        }
+      }, 100);
+    }
   } else {
     // 新規参加の場合、CPUを1人削除して人間プレイヤーを追加
     const cpuIndex = room.players.findIndex(p => p.type === 'cpu');
@@ -2934,6 +3046,7 @@ function setPlayerReady(roomId, socketId, ready) {
   const allReady = humanPlayers.every(p => p.ready);
   
   if (allReady && humanPlayers.length >= 1) {
+    logWithTime(`🎮 [GAME START] ${humanPlayers.length}人の人間プレイヤー + CPU でゲーム開始`);
     startRoomGame(room);
   }
   
@@ -3045,13 +3158,19 @@ function startRoomGame(room) {
   
   logWithTime(`🎮 [GAME START] ゲーム開始`, room.id);
   
-  // 全プレイヤーにゲーム開始を通知
-  room.players.forEach(player => {
-    if (player.socketId) {
+  // 全プレイヤーにゲーム開始を通知（プレイヤーIDも送信）
+  room.players.forEach((player, index) => {
+    if (player.socketId && player.type === 'human') {
       const socket = io.sockets.sockets.get(player.socketId);
       if (socket) {
         socket.gameId = room.id;
-        socket.emit('gameState', gameState);
+        socket.playerId = index; // プレイヤーIDを設定
+        socket.emit('gameState', {
+          ...gameState,
+          myPlayerId: index, // 自分のプレイヤーIDを追加
+          playerName: player.name
+        });
+        logWithTime(`🎮 [GAME START NOTIFY] ${player.name} (ID: ${index}) にゲーム状態送信`);
       }
     }
   });
@@ -3079,6 +3198,38 @@ io.on('connection', (socket) => {
         // 必要に応じて部屋の状態を更新
         if (room.status === ROOM_STATUS.WAITING) {
           io.to(roomId).emit('roomUpdate', { room: room });
+          
+          // 全プレイヤーがオフラインになった場合は遅延削除（ページ遷移を考慮）
+          const onlinePlayers = room.players.filter(p => p.socketId !== null);
+          if (onlinePlayers.length === 0) {
+            logWithTime(`⏰ [ROOM CLEANUP SCHEDULED] 空のルーム削除予約: ${roomId} (30秒後)`);
+            
+            // 30秒後に再確認して削除
+            setTimeout(() => {
+              const currentRoom = rooms.get(roomId);
+              if (currentRoom) {
+                const currentOnlinePlayers = currentRoom.players.filter(p => p.socketId !== null);
+                logWithTime(`🔍 [ROOM CLEANUP CHECK] 部屋 ${roomId} 確認: オンライン ${currentOnlinePlayers.length}人`);
+                if (currentOnlinePlayers.length === 0) {
+                  logWithTime(`🗑️ [ROOM CLEANUP EXECUTED] 空のルーム削除実行: ${roomId}`);
+                  rooms.delete(roomId);
+                  // ゲーム状態も削除
+                  if (games.has(roomId)) {
+                    games.delete(roomId);
+                  }
+                  logWithTime(`📊 [ROOM COUNT] 残り部屋数: ${rooms.size}`);
+                } else {
+                  logWithTime(`⏸️ [ROOM CLEANUP CANCELLED] プレイヤーが再接続したため削除キャンセル: ${roomId}`);
+                }
+              } else {
+                logWithTime(`❓ [ROOM CLEANUP] 部屋 ${roomId} が既に削除済み`);
+              }
+            }, 30000); // 30秒の猶予
+          }
+        } else if (room.status === ROOM_STATUS.PLAYING) {
+          // ゲーム中の場合は一時停止状態にする
+          logWithTime(`⏸️ [GAME PAUSE] プレイヤー切断によりゲーム一時停止: ${roomId}`);
+          // TODO: ゲーム一時停止ロジック
         }
       }
     }
@@ -3099,16 +3250,20 @@ io.on('connection', (socket) => {
       return;
     }
     
-    const roomId = (roomIdCounter.current++).toString();
+    const roomId = generateSecureRoomId();
     const room = createRoom(roomId, roomName, playerName);
     
     // 作成者を部屋に参加させる
     const joinResult = joinRoom(roomId, playerName, socket.id);
     if (joinResult.success) {
+      // ソケットをルームに参加させる
       socket.join(roomId);
       console.log(`✅ [SUCCESS] 部屋作成成功: ${roomId}`);
       socket.emit('roomCreated', { room: joinResult.room });
-      socket.to(roomId).emit('roomUpdate', { room: joinResult.room });
+      io.to(roomId).emit('roomUpdate', { room: joinResult.room });
+      
+      // 部屋一覧も更新
+      io.emit('roomList', { rooms: Array.from(rooms.values()) });
     } else {
       console.log(`❌ [ERROR] 部屋参加失敗:`, joinResult.message);
       socket.emit('joinError', { message: joinResult.message });
@@ -3122,10 +3277,14 @@ io.on('connection', (socket) => {
     const result = joinRoom(roomId, playerName, socket.id);
     
     if (result.success) {
+      // ソケットをルームに参加させる
       socket.join(roomId);
       console.log(`✅ [SUCCESS] 部屋参加成功: ${playerName} → ${roomId}`);
       socket.emit('roomJoined', { room: result.room });
-      socket.to(roomId).emit('roomUpdate', { room: result.room });
+      io.to(roomId).emit('roomUpdate', { room: result.room });
+      
+      // 部屋一覧も更新
+      io.emit('roomList', { rooms: Array.from(rooms.values()) });
     } else {
       console.log(`❌ [ERROR] 部屋参加失敗:`, result.message);
       socket.emit('joinError', { message: result.message });
@@ -3233,6 +3392,9 @@ io.on('connection', (socket) => {
         break;
       case 'draw':
         handleDraw(socket, gameState, data);
+        break;
+      case 'pass':
+        handlePass(socket, gameState, data);
         break;
       case 'chi':
       case 'pon':

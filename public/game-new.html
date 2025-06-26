@@ -1322,6 +1322,7 @@
             <button class="btn btn-warning" onclick="callChi()" id="chiBtn" style="display: inline-block;">チー</button>
             <button class="btn btn-warning" onclick="callPon()" id="ponBtn" style="display: inline-block;">ポン</button>
             <button class="btn btn-warning" onclick="callKan()" id="kanBtn" style="display: inline-block;">カン</button>
+            <button class="btn btn-secondary" onclick="passMeld()" id="passBtn" style="display: none;">パス</button>
             <button class="btn" style="background: linear-gradient(45deg, #ff6b6b, #ee5a24); color: white;" onclick="callMeld()" id="meldBtn" style="display: none;">スマートメルド</button>
             <button class="btn btn-success" onclick="callTsumo()" id="tsumoBtn">ツモ</button>
             <button class="btn btn-success" onclick="callRon()" id="ronBtn">ロン</button>
@@ -1379,6 +1380,33 @@
         // 変数初期化
         let isConnected = false;
         let currentTenpaiStatus = { isTenpai: false, waitingTiles: [] };
+        let myPlayerId = 0; // 自分のプレイヤーID（デフォルト0、サーバーから受信して更新）
+        
+        // デバッグ用: gameId状態を定期チェック
+        setInterval(() => {
+            console.log('🔍 [STATUS CHECK] gameId:', gameId, 'isConnected:', isConnected, 'roomId from URL:', roomId);
+        }, 5000);
+        
+        // プレイヤーIDを視覚位置にマッピングする関数
+        function getVisualPosition(actualPlayerId, myPlayerId) {
+            // 自分のプレイヤーIDを基準に相対位置を計算
+            // myPlayerIdは常に視覚位置0（下）になる
+            const offset = myPlayerId;
+            return (actualPlayerId - offset + 4) % 4;
+        }
+        
+        // 視覚位置から実際のプレイヤーIDを取得する関数
+        function getActualPlayerId(visualPosition, myPlayerId) {
+            return (visualPosition + myPlayerId) % 4;
+        }
+        
+        // URLパラメータから部屋情報を取得
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomId = urlParams.get('roomId');
+        const playerName = urlParams.get('playerName');
+        const isOnlineGame = roomId && playerName;
+        
+        console.log('🔍 URL Parameters:', { roomId, playerName, isOnlineGame });
         
         // Socket.IO接続
         const socket = io();
@@ -1387,11 +1415,65 @@
         socket.on('connect', () => {
             console.log('🔌 Socket.IO接続成功');
             isConnected = true;
+            
+            // オンライン麻雀の場合、既存の部屋に接続
+            if (isOnlineGame) {
+                console.log('🎮 オンライン麻雀: 既存部屋に接続中...', roomId);
+                socket.gameId = roomId;
+                gameId = roomId; // クライアント側のgameId変数も設定
+                console.log('🔍 gameId set to:', gameId);
+                socket.emit('joinRoom', {
+                    roomId: roomId,
+                    playerName: playerName
+                });
+            }
         });
         
         socket.on('disconnect', () => {
             console.log('🔌 Socket.IO切断');
             isConnected = false;
+            
+            if (isOnlineGame) {
+                showNotification('サーバーとの接続が切断されました', 'error');
+            }
+        });
+        
+        // オンライン麻雀専用イベントハンドラー
+        socket.on('roomJoined', (data) => {
+            console.log('🏠 部屋接続成功:', data);
+            showNotification('ゲームに参加しました', 'success');
+            
+            // サーバーからは { room: roomObject } の形式で送信される
+            if (data.room && data.room.id) {
+                gameId = data.room.id;
+                console.log('🔍 gameId set from data.room.id:', gameId);
+                
+                // ゲーム状態も取得
+                if (data.room.gameState) {
+                    console.log('🎮 進行中のゲームに参加');
+                    gameState = data.room.gameState;
+                    updateGameDisplay();
+                }
+            } else if (data.roomId) {
+                // 旧形式への対応
+                gameId = data.roomId;
+                console.log('🔍 gameId set from data.roomId:', gameId);
+                
+                if (data.gameState) {
+                    gameState = data.gameState;
+                    updateGameDisplay();
+                }
+            }
+        });
+        
+        socket.on('joinError', (data) => {
+            console.log('❌ 部屋接続エラー:', data);
+            showNotification(`接続エラー: ${data.message}`, 'error');
+            
+            // 3秒後にロビーに戻る
+            setTimeout(() => {
+                window.location.href = '/lobby.html';
+            }, 3000);
         });
         
         socket.on('gameUpdate', (newGameState) => {
@@ -1399,17 +1481,17 @@
             
             // ツモタイミング追跡
             if (gameState && newGameState && gameState.players && newGameState.players) {
-                const oldHandSize = gameState.players[0]?.hand?.tiles?.length || 0;
-                const newHandSize = newGameState.players[0]?.hand?.tiles?.length || 0;
+                const oldHandSize = gameState.players[myPlayerId]?.hand?.tiles?.length || 0;
+                const newHandSize = newGameState.players[myPlayerId]?.hand?.tiles?.length || 0;
                 const oldCurrentPlayer = gameState.currentPlayer;
                 const newCurrentPlayer = newGameState.currentPlayer;
                 
                 console.log('🔍 Hand size change:', oldHandSize, '→', newHandSize);
                 console.log('🔍 Current player change:', oldCurrentPlayer, '→', newCurrentPlayer);
                 
-                if (newHandSize > oldHandSize && newCurrentPlayer === 0) {
-                    console.log('🎯 TSUMO DETECTED: Player drew a tile');
-                    console.log('🔍 New tiles:', newGameState.players[0].hand.tiles.map((t, i) => `${i}: ${t.suit}${t.rank} (id:${t.id})`));
+                if (newHandSize > oldHandSize && newCurrentPlayer === myPlayerId) {
+                    console.log('🎯 TSUMO DETECTED: I drew a tile');
+                    console.log('🔍 My new tiles:', newGameState.players[myPlayerId].hand.tiles.map((t, i) => `${i}: ${t.suit}${t.rank} (id:${t.id})`));
                 }
             }
             
@@ -1420,6 +1502,7 @@
         socket.on('roomCreated', (data) => {
             console.log('🎮 ルーム作成成功:', data);
             gameId = data.room.id;
+            console.log('🔍 gameId set from roomCreated:', gameId);
             showNotification('ゲームが作成されました！', 'success');
             
             // シングルプレイヤーゲームの場合、自動で準備完了にする
@@ -1435,16 +1518,22 @@
         let gameStartNotified = false;
         
         socket.on('gameState', (newGameState) => {
-            // console.log('🎮 ゲーム状態受信:', newGameState);
+            console.log('🎮 ゲーム状態受信:', newGameState);
+            
+            // プレイヤーIDを設定（サーバーから送信された場合）
+            if (newGameState.myPlayerId !== undefined) {
+                myPlayerId = newGameState.myPlayerId;
+                console.log(`👤 [MY PLAYER ID] 自分のプレイヤーID: ${myPlayerId} (${newGameState.playerName})`);
+            }
             
             // ツモタイミング追跡（gameStateイベント）
             if (gameState && newGameState && gameState.players && newGameState.players) {
-                const oldHandSize = gameState.players[0]?.hand?.tiles?.length || 0;
-                const newHandSize = newGameState.players[0]?.hand?.tiles?.length || 0;
+                const myCurrentHandSize = gameState.players[myPlayerId]?.hand?.tiles?.length || 0;
+                const myNewHandSize = newGameState.players[myPlayerId]?.hand?.tiles?.length || 0;
                 
-                if (newHandSize > oldHandSize) {
-                    console.log('🎯 TSUMO DETECTED (gameState): Player drew a tile');
-                    console.log('🔍 New tiles (gameState):', newGameState.players[0].hand.tiles.map((t, i) => `${i}: ${t.suit}${t.rank} (id:${t.id})`));
+                if (myNewHandSize > myCurrentHandSize) {
+                    console.log('🎯 TSUMO DETECTED (gameState): I drew a tile');
+                    console.log('🔍 My new tiles:', newGameState.players[myPlayerId].hand.tiles.map((t, i) => `${i}: ${t.suit}${t.rank} (id:${t.id})`));
                 }
             }
             
@@ -2003,8 +2092,8 @@
                 console.log('🀄 [DEBUG] chi:', myOpportunity.chi, 'pon:', myOpportunity.pon, 'kan:', myOpportunity.kan);
                 
                 // 改善されたメルド選択UIを自動表示
-                if (gameState && gameState.players && gameState.players[0]) {
-                    const myTiles = gameState.players[0].hand.tiles;
+                if (gameState && gameState.players && gameState.players[myPlayerId]) {
+                    const myTiles = gameState.players[myPlayerId].hand.tiles;
                     const discarded = lastDiscardedTile || discardedTile;
                     
                     if (discarded && myTiles) {
@@ -2050,6 +2139,12 @@
                             showMeldSelectionUI(allOptions);
                         }
                     }
+                }
+                
+                // パスボタンを表示
+                const passBtn = document.getElementById('passBtn');
+                if (passBtn) {
+                    passBtn.style.display = 'inline-block';
                 }
                 
                 // 従来のボタン表示も維持（バックアップ）
@@ -2115,12 +2210,7 @@
             // if (kanBtn) kanBtn.style.display = 'none';
         }
         
-        socket.on('roomJoined', (data) => {
-            console.log('🎮 ルーム参加成功:', data);
-            gameId = data.roomId;
-            gameState = data.gameState;
-            updateGameDisplay();
-        });
+        // 重複したroomJoinedハンドラーを削除
         
         socket.on('actionResult', (result) => {
             console.log('✅ アクション結果:', result);
@@ -2158,6 +2248,16 @@
         // 初期化
         document.addEventListener('DOMContentLoaded', async function() {
             console.log('🔍 DEBUG: DOM loaded, initializing...');
+            console.log('🔍 DEBUG: Initial gameId:', gameId);
+            console.log('🔍 DEBUG: URL roomId:', roomId);
+            console.log('🔍 DEBUG: isOnlineGame:', isOnlineGame);
+            
+            // オンラインゲームの場合はgameIdを即座に設定
+            if (isOnlineGame && roomId) {
+                gameId = roomId;
+                console.log('🔍 DEBUG: gameId set from URL roomId:', gameId);
+            }
+            
             hideMeldButtons(); // 初期状態でメルドボタンを非表示
             try {
                 await soundManager.init();
@@ -2170,7 +2270,10 @@
             addDiscardClickTest();
             console.log('🔍 DEBUG: Discard click test initialized');
             
-            newGame();
+            // オンラインゲームでない場合のみnewGame()を呼ぶ
+            if (!isOnlineGame) {
+                newGame();
+            }
             
             try {
                 soundManager.playGameStart();
@@ -2183,6 +2286,12 @@
         function newGame() {
             if (!isConnected) {
                 showNotification('サーバーに接続されていません', 'error');
+                return;
+            }
+            
+            // オンライン麻雀の場合は新ゲーム作成を無効化
+            if (isOnlineGame) {
+                showNotification('オンライン麻雀では新ゲーム作成できません', 'warning');
                 return;
             }
             
@@ -2451,9 +2560,15 @@
                 
                 gameState.players.forEach((player, index) => {
                     console.log(`🔍 DEBUG: Processing player ${index}:`, player);
-                    const playerElement = document.getElementById(`player${index}`);
+                    
+                    // 視覚位置を計算
+                    const visualPos = getVisualPosition(index, myPlayerId);
+                    const playerElement = document.getElementById(`player${visualPos}`);
+                    
+                    console.log(`🔍 DEBUG: Player ${index} -> Visual position ${visualPos}`);
+                    
                     if (!playerElement) {
-                        console.warn(`🔍 DEBUG: Player element not found: player${index}`);
+                        console.warn(`🔍 DEBUG: Player element not found: player${visualPos}`);
                         return;
                     }
 
@@ -2475,20 +2590,20 @@
                 updateRiichiDisplay(playerElement, player, index);
 
                     // 手牌更新
-                    const handElement = document.getElementById(`hand${index}`);
-                    console.log(`🔍 DEBUG: handElement for player ${index}:`, handElement);
+                    const handElement = document.getElementById(`hand${visualPos}`);
+                    console.log(`🔍 DEBUG: handElement for player ${index} (visual ${visualPos}):`, handElement);
                     console.log(`🔍 DEBUG: player.hand for player ${index}:`, player.hand);
                     console.log(`🔍 DEBUG: player.hand.tiles for player ${index}:`, player.hand?.tiles);
                     
                     if (handElement && player.hand && player.hand.tiles) {
                         handElement.innerHTML = '';
                         
-                        if (index === 0) {
-                            // プレイヤーの手牌（表示）
+                        if (index === myPlayerId) {
+                            // 自分の手牌（詳細表示）
                             // 総牌数を計算
                             const totalTiles = player.hand.tiles.length + (player.hand.melds?.length || 0) * 3;
                             
-                            console.log(`🔍 DEBUG: Updating player 0 hand with ${player.hand.tiles.length} tiles`);
+                            console.log(`🔍 DEBUG: Updating my hand (player ${myPlayerId}) with ${player.hand.tiles.length} tiles`);
                             console.log(`🔍 DEBUG: Tile order:`, player.hand.tiles.map((t, i) => `${i}: ${t.suit}${t.rank || ''} (id:${t.id})`));
                             console.log(`🔍 DEBUG: Current player:`, gameState.currentPlayer, 'Total tiles:', totalTiles);
                             
@@ -2517,7 +2632,7 @@
                                     
                                     // 元の配列でのインデックスを取得してselectTileに渡す
                                     const originalIndex = player.hand.tiles.findIndex(t => t && t.id === tile.id);
-                                    tileElement.onclick = () => selectTile(index, originalIndex >= 0 ? originalIndex : tileIndex, tile);
+                                    tileElement.onclick = () => selectTile(visualPos, originalIndex >= 0 ? originalIndex : tileIndex, tile);
                                     handElement.appendChild(tileElement);
                                 });
                                 
@@ -2534,7 +2649,7 @@
                                     if (tile.suit) tileElement.classList.add(tile.suit);
                                     
                                     tileElement.textContent = getTileDisplayName(tile);
-                                    tileElement.onclick = () => selectTile(index, tileIndex, tile);
+                                    tileElement.onclick = () => selectTile(visualPos, tileIndex, tile);
                                     handElement.appendChild(tileElement);
                                 });
                             }
@@ -2556,7 +2671,7 @@
                             }
                             
                             // CPU点数更新
-                            const scoreElement = document.getElementById(`player${index}Score`);
+                            const scoreElement = document.getElementById(`player${visualPos}Score`);
                             if (scoreElement) {
                                 scoreElement.textContent = player.score;
                             }
@@ -2574,7 +2689,8 @@
             // 各プレイヤーの河更新（本格麻雀仕様）
             if (gameState.players) {
                 gameState.players.forEach((player, playerIndex) => {
-                    const riverElement = document.getElementById(`river${playerIndex}`);
+                    const visualPos = getVisualPosition(playerIndex, myPlayerId);
+                    const riverElement = document.getElementById(`river${visualPos}`);
                     if (riverElement && player.hand && player.hand.discards) {
                         riverElement.innerHTML = '';
                         
@@ -2600,7 +2716,7 @@
                             tileElement.textContent = getTileDisplayName(tile);
                             
                             // プレイヤー位置に応じた牌の回転
-                            switch (playerIndex) {
+                            switch (visualPos) {
                                 case 1: // CPU南（下家）：左に90度回転
                                     tileElement.style.transform = 'rotate(-90deg)';
                                     break;
@@ -2611,11 +2727,11 @@
                             }
                             
                             // 6×3グリッドの配置順序
-                            const gridOrder = calculateRiverOrder(playerIndex, discardIndex);
+                            const gridOrder = calculateRiverOrder(visualPos, discardIndex);
                             tileElement.style.order = gridOrder;
                             
                             // デバッグ用: order値を表示
-                            if (playerIndex === 0) {
+                            if (visualPos === 0) {
                                 tileElement.setAttribute('data-order', gridOrder);
                             }
                             
@@ -2643,7 +2759,8 @@
             if (!gameState || !gameState.players) return;
             
             gameState.players.forEach((player, playerIndex) => {
-                const meldElement = document.getElementById(`melds${playerIndex}`);
+                const visualPos = getVisualPosition(playerIndex, myPlayerId);
+                const meldElement = document.getElementById(`melds${visualPos}`);
                 if (!meldElement) return;
                 
                 // プレイヤーにメルドデータがない場合は表示をクリア
@@ -2820,9 +2937,9 @@
             if (!gameState || !statusElement) return;
 
             const currentPlayerName = gameState.players[gameState.currentPlayer]?.name;
-            const playerHand = gameState.players[0].hand.tiles;
+            const playerHand = gameState.players[myPlayerId].hand.tiles;
             const handCount = playerHand ? playerHand.length : 0;
-            const isMyTurn = gameState.currentPlayer === 0;
+            const isMyTurn = gameState.currentPlayer === myPlayerId;
             
             let statusText = `${currentPlayerName}のターン`;
             if (isMyTurn) {
@@ -2866,8 +2983,8 @@
         function updateActionButtons() {
             if (!gameState) return;
             
-            const isMyTurn = gameState.currentPlayer === 0;
-            const player = gameState.players?.[0];
+            const isMyTurn = gameState.currentPlayer === myPlayerId;
+            const player = gameState.players?.[myPlayerId];
             const handTiles = player?.hand?.tiles?.length || 0;
             const meldCount = player?.hand?.melds?.length || 0;
             const totalTiles = handTiles + (meldCount * 3);
@@ -2926,8 +3043,8 @@
         
         // アクション可能性チェック関数
         function canCallRiichi() {
-            if (!gameState || !gameState.players[0]) return false;
-            const player = gameState.players[0];
+            if (!gameState || !gameState.players[myPlayerId]) return false;
+            const player = gameState.players[myPlayerId];
             return !player.hand.riichi && player.score >= 1000; // 既にリーチしてない、1000点以上ある
         }
         
@@ -3626,12 +3743,15 @@
 
         // 牌選択
         function selectTile(playerIndex, tileIndex, tile) {
-            if (playerIndex !== 0) {
+            // 視覚位置から実際のプレイヤーIDを取得
+            const actualPlayerId = getActualPlayerId(playerIndex, myPlayerId);
+            
+            if (actualPlayerId !== myPlayerId) {
                 showNotification('自分の牌のみ選択できます', 'warning');
                 return;
             }
             
-            if (gameState && gameState.currentPlayer !== 0) {
+            if (gameState && gameState.currentPlayer !== myPlayerId) {
                 showNotification('あなたのターンではありません', 'warning');
                 return;
             }
@@ -3646,7 +3766,7 @@
             }
 
             // 新しい牌を選択
-            selectedTile = { playerIndex, tileIndex, tile };
+            selectedTile = { playerIndex: actualPlayerId, tileIndex, tile };
             document.getElementById('hand0').children[tileIndex].classList.add('selected');
             soundManager.playSound('tileSelect');
             showNotification(`${tile.displayName || tile.unicode} を選択（再クリックで打牌）`, 'info');
@@ -3654,8 +3774,24 @@
 
         // 打牌処理
         function discardSelected() {
-            if (!selectedTile || !gameId || !isConnected) {
+            console.log('🎯 discardSelected called');
+            console.log('🔍 selectedTile:', selectedTile);
+            console.log('🔍 gameId:', gameId);
+            console.log('🔍 isConnected:', isConnected);
+            
+            if (!selectedTile) {
                 showNotification('牌を選択してください', 'warning');
+                return;
+            }
+            
+            if (!gameId) {
+                showNotification('ゲームIDが設定されていません', 'error');
+                console.error('❌ gameId is null/undefined');
+                return;
+            }
+            
+            if (!isConnected) {
+                showNotification('サーバーに接続されていません', 'error');
                 return;
             }
 
@@ -3726,6 +3862,45 @@
             }
         }
 
+        // パスボタンを非表示にする関数
+        function hidePassButton() {
+            const passBtn = document.getElementById('passBtn');
+            if (passBtn) {
+                passBtn.style.display = 'none';
+            }
+        }
+
+        // メルドパス関数
+        function passMeld() {
+            console.log('⏩ passMeld() called');
+            
+            if (!gameId || !isConnected) {
+                showNotification('ゲームに接続されていません', 'error');
+                return;
+            }
+            
+            console.log('⏩ パスアクション送信');
+            socket.emit('playerAction', {
+                type: 'pass',
+                playerId: `player_${myPlayerId}`,
+                timestamp: Date.now()
+            });
+            
+            // パスボタンを非表示
+            hidePassButton();
+            
+            // メルド選択UIを非表示
+            const existingUI = document.querySelector('.meld-selection-modal');
+            if (existingUI) {
+                existingUI.remove();
+            }
+            
+            // パスボタンも非表示
+            hidePassButton();
+            
+            showNotification('パスしました', 'info');
+        }
+
         // 鳴き関数
         // チー
         async function callChi() {
@@ -3788,6 +3963,9 @@
                     priority: 2,
                     timestamp: Date.now()
                 });
+                
+                // パスボタンを非表示
+                hidePassButton();
                 
                 soundManager.playSound('meld');
             } catch (error) {
