@@ -587,39 +587,41 @@ function handleDiscard(socket, gameState, data) {
     console.log(`🔄 [DEBUG] プレイヤー変更: ${oldPlayer} → ${gameState.currentPlayer}`);
     console.log(`🔍 [DEBUG] 次のプレイヤータイプ: ${gameState.players[gameState.currentPlayer].type}`);
     
-    // 捨て牌後、CPU自動モードを再開（メルド機会がない場合）
-    if (gameState.phase === 'discard') {
-      gameState.phase = 'playing';
-      gameState.cpuAutoMode = true;
-      logWithTime(`🔄 [TURN] メルド後の捨て牌完了 - CPU自動モード再開`);
-      
-      // CPU自動対戦を即座に再開
-      setTimeout(() => {
-        logWithTime(`🤖 [AUTO RESTART] CPU自動対戦を再開します`);
-        startCpuAutoGame(socket.gameId);
-      }, 1000);
+    // メルド機会チェック後にCPU自動再開を決定
+    const shouldRestartCpuAuto = gameState.cpuAutoMode !== false;
+    logWithTime(`🔍 [DEBUG] cpuAutoMode after meld check: ${gameState.cpuAutoMode}, shouldRestart: ${shouldRestartCpuAuto}`);
+    
+    if (shouldRestartCpuAuto) {
+      // メルド機会がない場合のみCPU自動を再開
+      if (gameState.phase === 'discard') {
+        gameState.phase = 'playing';
+        gameState.cpuAutoMode = true;
+        logWithTime(`🔄 [TURN] メルド後の捨て牌完了 - CPU自動モード再開`);
+        
+        // CPU自動対戦を即座に再開
+        setTimeout(() => {
+          logWithTime(`🤖 [AUTO RESTART] CPU自動対戦を再開します`);
+          startCpuAutoGame(socket.gameId);
+        }, 1000);
+      } else {
+        // 通常の捨て牌後のCPU自動再開
+        logWithTime(`🔄 [TURN] 通常捨て牌完了 - CPU自動継続`);
+        
+        setTimeout(() => {
+          // 再度メルド状態を確認してから継続
+          const currentGameState = games.get(socket.gameId);
+          if (currentGameState && currentGameState.cpuAutoMode !== false) {
+            logWithTime(`🤖 [AUTO CONTINUE] CPU自動対戦を継続します`);
+            if (!isCpuAutoRunning(socket.gameId)) {
+              startCpuAutoGame(socket.gameId);
+            }
+          } else {
+            logWithTime(`⏸️ [AUTO PAUSED] メルド機会により自動継続を停止`);
+          }
+        }, 500);
+      }
     } else {
-      // 通常の捨て牌後もCPU自動モードを再開（ただし、メルド機会チェック後に判断）
-      logWithTime(`🔄 [TURN] 通常捨て牌完了 - メルド機会チェック後にCPU自動再開予定`);
-      
-      // メルド機会がなければCPU自動を再開
-      setTimeout(() => {
-        if (gameState.cpuAutoMode === false) {
-          // メルド機会で停止していた場合のみ条件確認
-          const hasActiveMeldOpportunity = checkIfMeldOpportunityActive(gameState);
-          if (!hasActiveMeldOpportunity) {
-            gameState.cpuAutoMode = true;
-            logWithTime(`🤖 [AUTO RESTART] メルド機会終了 - CPU自動対戦を再開します`);
-            startCpuAutoGame(socket.gameId);
-          }
-        } else {
-          // 既にCPU自動が有効な場合は継続
-          logWithTime(`🤖 [AUTO CONTINUE] CPU自動対戦を継続します`);
-          if (!isCpuAutoRunning(socket.gameId)) {
-            startCpuAutoGame(socket.gameId);
-          }
-        }
-      }, 500);
+      logWithTime(`⏸️ [AUTO STOPPED] メルド機会が検出されたため、CPU自動再開をスキップ`);
     }
     
     games.set(socket.gameId, gameState);
@@ -662,8 +664,17 @@ function handleMeld(socket, gameState, data) {
       return;
   }
   
+  // メルド実行後はCPU自動モードを再開
+  gameState.cpuAutoMode = true;
+  logWithTime(`🔄 [MELD COMPLETE] メルド実行完了 - CPU自動モード再開`);
+  
   games.set(socket.gameId, gameState);
   io.to(socket.gameId).emit('gameState', gameState);
+  
+  // メルド後のCPU自動ゲーム再開
+  setTimeout(() => {
+    startCpuAutoGame(socket.gameId);
+  }, 500);
 }
 
 function handleChi(gameState, playerId, data) {
@@ -1913,9 +1924,15 @@ function handlePass(socket, gameState, data) {
       
       // CPU自動モードを再開
       gameState.cpuAutoMode = true;
+      logWithTime(`🔄 [PASS COMPLETE] パス完了 - CPU自動モード再開`);
       
       games.set(socket.gameId, gameState);
       io.to(socket.gameId).emit('gameState', gameState);
+      
+      // パス後のCPU自動ゲーム再開
+      setTimeout(() => {
+        startCpuAutoGame(socket.gameId);
+      }, 500);
     } else {
       logWithTime(`❌ [PASS ERROR] 山牌が空です`);
       handleRyukyoku(socket, gameState);
@@ -2041,9 +2058,26 @@ function checkTempai(handTiles, melds = []) {
 function startCpuAutoGame(gameId) {
   console.log(`🤖 [DEBUG] startCpuAutoGame called for gameId: ${gameId}`);
   const gameState = games.get(gameId);
-  if (!gameState || !gameState.cpuAutoMode) {
-    console.log(`🤖 [DEBUG] ゲーム状態またはCPU自動モードが無効: gameState=${!!gameState}, cpuAutoMode=${gameState?.cpuAutoMode}`);
+  if (!gameState) {
+    console.log(`🤖 [DEBUG] ゲーム状態が見つかりません: gameId=${gameId}`);
     return;
+  }
+  
+  if (!gameState.cpuAutoMode) {
+    console.log(`🤖 [DEBUG] CPU自動モードが無効です: cpuAutoMode=${gameState.cpuAutoMode}`);
+    return;
+  }
+  
+  // 人間プレイヤーがメルド機会を持っている可能性をより厳密にチェック
+  const currentPlayer = gameState.players[gameState.currentPlayer];
+  if (currentPlayer.type === 'human') {
+    console.log(`🤖 [DEBUG] 現在のプレイヤーは人間です: ${currentPlayer.name}`);
+    
+    // メルド待ち状態の追加チェック
+    if (gameState.cpuAutoMode === false) {
+      console.log(`⏸️ [MELD WAIT] 人間プレイヤーがメルド機会待ちのため、自動実行を停止`);
+      return;
+    }
   }
   
   const cpuTurn = () => {
